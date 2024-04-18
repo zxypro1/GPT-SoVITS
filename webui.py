@@ -5,6 +5,9 @@ import json,yaml,warnings,torch
 import platform
 import psutil
 import signal
+from tools.subfix_webui import *
+from tools.uvr5.webui import *
+from GPT_SoVITS.inference_webui import *
 
 warnings.filterwarnings("ignore")
 torch.manual_seed(233333)
@@ -50,7 +53,7 @@ from subprocess import Popen
 import signal
 from config import python_exec,infer_device,is_half,exp_root,webui_port_main,webui_port_infer_tts,webui_port_uvr5,webui_port_subfix,is_share
 from tools.i18n.i18n import I18nAuto
-i18n = I18nAuto()
+i18n = I18nAuto(language='zh-CN')
 from scipy.io import wavfile
 from tools.my_utils import load_audio
 from multiprocessing import cpu_count
@@ -58,7 +61,7 @@ from multiprocessing import cpu_count
 # os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1' # 当遇到mps不支持的步骤时使用cpu
 
 n_cpu=cpu_count()
-           
+
 ngpu = torch.cuda.device_count()
 gpu_infos = []
 mem = []
@@ -121,7 +124,7 @@ p_asr=None
 p_denoise=None
 p_tts_inference=None
 
-def kill_proc_tree(pid, including_parent=True):  
+def kill_proc_tree(pid, including_parent=True):
     try:
         parent = psutil.Process(pid)
     except psutil.NoSuchProcess:
@@ -147,20 +150,17 @@ def kill_process(pid):
         os.system(cmd)
     else:
         kill_proc_tree(pid)
-    
 
-def change_label(if_label,path_list):
-    global p_label
-    if(if_label==True and p_label==None):
-        path_list=my_utils.clean_path(path_list)
-        cmd = '"%s" tools/subfix_webui.py --load_list "%s" --webui_port %s --is_share %s'%(python_exec,path_list,webui_port_subfix,is_share)
-        yield i18n("打标工具WebUI已开启")
-        print(cmd)
-        p_label = Popen(cmd, shell=True)
-    elif(if_label==False and p_label!=None):
-        kill_process(p_label.pid)
-        p_label=None
-        yield i18n("打标工具WebUI已关闭")
+
+def change_label(path_list):
+    path_list=str(my_utils.clean_path(path_list))
+    set_global(load_json="None",
+               load_list=path_list,
+               json_key_path="wav_path",
+               json_key_text="text",
+               batch=10)
+
+change_label("output/asr_opt/denoise_opt.list")
 
 def change_uvr5(if_uvr5):
     global p_uvr5
@@ -174,25 +174,15 @@ def change_uvr5(if_uvr5):
         p_uvr5=None
         yield i18n("UVR5已关闭")
 
-def change_tts_inference(if_tts,bert_path,cnhubert_base_path,gpu_number,gpt_path,sovits_path):
-    global p_tts_inference
-    if(if_tts==True and p_tts_inference==None):
-        os.environ["gpt_path"]=gpt_path if "/" in gpt_path else "%s/%s"%(GPT_weight_root,gpt_path)
-        os.environ["sovits_path"]=sovits_path if "/"in sovits_path else "%s/%s"%(SoVITS_weight_root,sovits_path)
-        os.environ["cnhubert_base_path"]=cnhubert_base_path
-        os.environ["bert_path"]=bert_path
-        os.environ["_CUDA_VISIBLE_DEVICES"]=gpu_number
-        os.environ["is_half"]=str(is_half)
-        os.environ["infer_ttswebui"]=str(webui_port_infer_tts)
-        os.environ["is_share"]=str(is_share)
-        cmd = '"%s" GPT_SoVITS/inference_webui.py'%(python_exec)
-        yield i18n("TTS推理进程已开启")
-        print(cmd)
-        p_tts_inference = Popen(cmd, shell=True)
-    elif(if_tts==False and p_tts_inference!=None):
-        kill_process(p_tts_inference.pid)
-        p_tts_inference=None
-        yield i18n("TTS推理进程已关闭")
+def change_tts_inference(bert_path,cnhubert_base_path,gpu_number,gpt_path,sovits_path):
+    os.environ["gpt_path"]=gpt_path if "/" in gpt_path else "%s/%s"%(GPT_weight_root,gpt_path)
+    os.environ["sovits_path"]=sovits_path if "/"in sovits_path else "%s/%s"%(SoVITS_weight_root,sovits_path)
+    os.environ["cnhubert_base_path"]=cnhubert_base_path
+    os.environ["bert_path"]=bert_path
+    os.environ["_CUDA_VISIBLE_DEVICES"]=gpu_number
+    os.environ["is_half"]=str(is_half)
+    os.environ["infer_ttswebui"]=str(webui_port_infer_tts)
+    os.environ["is_share"]=str(is_share)
 
 from tools.asr.config import asr_dict
 def open_asr(asr_inp_dir, asr_opt_dir, asr_model, asr_model_size, asr_lang):
@@ -681,15 +671,66 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
     )
 
     with gr.Tabs():
-        with gr.TabItem(i18n("0-前置数据集获取工具")):#提前随机切片防止uvr5爆内存->uvr5->slicer->asr->打标
-            gr.Markdown(value=i18n("0a-UVR5人声伴奏分离&去混响去延迟工具"))
-            with gr.Row():
-                if_uvr5 = gr.Checkbox(label=i18n("是否开启UVR5-WebUI"),show_label=True)
-                uvr5_info = gr.Textbox(label=i18n("UVR5进程输出信息"))
-            gr.Markdown(value=i18n("0b-语音切分工具"))
+        with gr.TabItem("0-UVR5人声伴奏分离&去混响去延迟工具"):
+            with gr.Group():
+                gr.Markdown(
+                    value=i18n(
+                        "人声伴奏分离批量处理， 使用UVR5模型。 <br>合格的文件夹路径格式举例： E:\\codes\\py39\\vits_vc_gpu\\白鹭霜华测试样例(去文件管理器地址栏拷就行了)。 <br>模型分为三类： <br>1、保留人声：不带和声的音频选这个，对主人声保留比HP5更好。内置HP2和HP3两个模型，HP3可能轻微漏伴奏但对主人声保留比HP2稍微好一丁点； <br>2、仅保留主人声：带和声的音频选这个，对主人声可能有削弱。内置HP5一个模型； <br> 3、去混响、去延迟模型（by FoxJoy）：<br>  (1)MDX-Net(onnx_dereverb):对于双通道混响是最好的选择，不能去除单通道混响；<br>&emsp;(234)DeEcho:去除延迟效果。Aggressive比Normal去除得更彻底，DeReverb额外去除混响，可去除单声道混响，但是对高频重的板式混响去不干净。<br>去混响/去延迟，附：<br>1、DeEcho-DeReverb模型的耗时是另外2个DeEcho模型的接近2倍；<br>2、MDX-Net-Dereverb模型挺慢的；<br>3、个人推荐的最干净的配置是先MDX-Net再DeEcho-Aggressive。"
+                    )
+                )
+                with gr.Row():
+                    with gr.Column():
+                        dir_wav_input = gr.Textbox(
+                            label=i18n("输入待处理音频文件夹路径"),
+                            placeholder="C:\\Users\\Desktop\\todo-songs",
+                        )
+                        wav_inputs = gr.File(
+                            file_count="multiple", label=i18n("也可批量输入音频文件, 二选一, 优先读文件夹")
+                        )
+                    with gr.Column():
+                        model_choose = gr.Dropdown(label=i18n("模型"), choices=uvr5_names)
+                        agg = gr.Slider(
+                            minimum=0,
+                            maximum=20,
+                            step=1,
+                            label=i18n("人声提取激进程度"),
+                            value=10,
+                            interactive=True,
+                            visible=False,  # 先不开放调整
+                        )
+                        opt_vocal_root = gr.Textbox(
+                            label=i18n("指定输出主人声文件夹"), value="output/uvr5_opt"
+                        )
+                        opt_ins_root = gr.Textbox(
+                            label=i18n("指定输出非主人声文件夹"), value="output/uvr5_opt"
+                        )
+                        format0 = gr.Radio(
+                            label=i18n("导出文件格式"),
+                            choices=["wav", "flac", "mp3", "m4a"],
+                            value="flac",
+                            interactive=True,
+                        )
+                    but2 = gr.Button(i18n("转换"), variant="primary")
+                    vc_output4 = gr.Textbox(label=i18n("输出信息"))
+                    but2.click(
+                        uvr,
+                        [
+                            model_choose,
+                            dir_wav_input,
+                            opt_vocal_root,
+                            wav_inputs,
+                            opt_ins_root,
+                            agg,
+                            format0,
+                        ],
+                        [vc_output4],
+                        api_name="uvr_convert",
+                    )
+        with gr.TabItem(i18n("1-前置数据集获取工具")):#提前随机切片防止uvr5爆内存->uvr5->slicer->asr->打标
+            gr.Markdown(value=i18n("0a-语音切分工具"))
             with gr.Row():
                 with gr.Row():
-                    slice_inp_path=gr.Textbox(label=i18n("音频自动切分输入路径，可文件可文件夹"),value="")
+                    slice_inp_path=gr.Textbox(label=i18n("音频自动切分输入路径，可文件可文件夹"),value="output/uvr5_opt")
                     slice_opt_root=gr.Textbox(label=i18n("切分后的子音频的输出根目录"),value="output/slicer_opt")
                     threshold=gr.Textbox(label=i18n("threshold:音量小于这个值视作静音的备选切割点"),value="-34")
                     min_length=gr.Textbox(label=i18n("min_length:每段最小多长，如果第一段太短一直和后面段连起来直到超过这个值"),value="4000")
@@ -707,7 +748,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             with gr.Row():
                 open_denoise_button = gr.Button(i18n("开启语音降噪"), variant="primary",visible=True)
                 close_denoise_button = gr.Button(i18n("终止语音降噪进程"), variant="primary",visible=False)
-                denoise_input_dir=gr.Textbox(label=i18n("降噪音频文件输入文件夹"),value="")
+                denoise_input_dir=gr.Textbox(label=i18n("降噪音频文件输入文件夹"),value="output/slicer_opt")
                 denoise_output_dir=gr.Textbox(label=i18n("降噪结果输出文件夹"),value="output/denoise_opt")
                 denoise_info = gr.Textbox(label=i18n("语音降噪进程输出信息"))
             gr.Markdown(value=i18n("0c-中文批量离线ASR工具"))
@@ -718,7 +759,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                     with gr.Row():
                         asr_inp_dir = gr.Textbox(
                             label=i18n("输入文件夹路径"),
-                            value="D:\\GPT-SoVITS\\raw\\xxx",
+                            value="output/denoise_opt",
                             interactive=True,
                         )
                         asr_opt_dir = gr.Textbox(
@@ -756,18 +797,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                     return {"__type__": "update", "choices": asr_dict[key]['size']}
                 asr_model.change(change_lang_choices, [asr_model], [asr_lang])
                 asr_model.change(change_size_choices, [asr_model], [asr_size])
-                
-            gr.Markdown(value=i18n("0d-语音文本校对标注工具"))
-            with gr.Row():
-                if_label = gr.Checkbox(label=i18n("是否开启打标WebUI"),show_label=True)
-                path_list = gr.Textbox(
-                    label=i18n(".list标注文件的路径"),
-                    value="D:\\RVC1006\\GPT-SoVITS\\raw\\xxx.list",
-                    interactive=True,
-                )
-                label_info = gr.Textbox(label=i18n("打标工具进程输出信息"))
-            if_label.change(change_label, [if_label,path_list], [label_info])
-            if_uvr5.change(change_uvr5, [if_uvr5], [uvr5_info])
+
             open_asr_button.click(open_asr, [asr_inp_dir, asr_opt_dir, asr_model, asr_size, asr_lang], [asr_info,open_asr_button,close_asr_button])
             close_asr_button.click(close_asr, [], [asr_info,open_asr_button,close_asr_button])
             open_slicer_button.click(open_slice, [slice_inp_path,slice_opt_root,threshold,min_length,min_interval,hop_size,max_sil_kept,_max,alpha,n_process], [slicer_info,open_slicer_button,close_slicer_button])
@@ -775,7 +805,193 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             open_denoise_button.click(open_denoise, [denoise_input_dir,denoise_output_dir], [denoise_info,open_denoise_button,close_denoise_button])
             close_denoise_button.click(close_denoise, [], [denoise_info,open_denoise_button,close_denoise_button])
 
-        with gr.TabItem(i18n("1-GPT-SoVITS-TTS")):
+        with gr.TabItem("1.5-训练语音文本校对"):
+            path_list = gr.Textbox(
+                label=i18n(".list标注文件的路径"),
+                value="output/asr_opt/denoise_opt.list",
+                interactive=True,
+            )
+            # reBtn = gr.Button(
+            #     "刷新",
+            # )
+            path_list.change(change_label, [path_list])
+            with gr.Blocks() as demo:
+                with gr.Row():
+                    btn_change_index = gr.Button("Change Index / Refresh")
+                    btn_submit_change = gr.Button("Submit Text")
+                    btn_merge_audio = gr.Button("Merge Audio")
+                    btn_delete_audio = gr.Button("Delete Audio")
+                    btn_previous_index = gr.Button("Previous Index")
+                    btn_next_index = gr.Button("Next Index")
+
+                with gr.Row():
+                    index_slider = gr.Slider(
+                        minimum=0, maximum=g_max_json_index, value=g_index, step=1, label="Index", scale=3
+                    )
+                    splitpoint_slider = gr.Slider(
+                        minimum=0, maximum=120.0, value=0, step=0.1, label="Audio Split Point(s)", scale=3
+                    )
+                    btn_audio_split = gr.Button("Split Audio", scale=1)
+                    btn_save_json = gr.Button("Save File", visible=True, scale=1)
+                    btn_invert_selection = gr.Button("Invert Selection", scale=1)
+
+                with gr.Row():
+                    with gr.Column():
+                        for _ in range(0, g_batch):
+                            with gr.Row():
+                                text = gr.Textbox(
+                                    label="Text",
+                                    visible=True,
+                                    scale=5
+                                )
+                                audio_output = gr.Audio(
+                                    label="Output Audio",
+                                    visible=True,
+                                    scale=5
+                                )
+                                audio_check = gr.Checkbox(
+                                    label="Yes",
+                                    show_label=True,
+                                    info="Choose Audio",
+                                    scale=1
+                                )
+                                g_text_list.append(text)
+                                g_audio_list.append(audio_output)
+                                g_checkbox_list.append(audio_check)
+
+                with gr.Row():
+                    batchsize_slider = gr.Slider(
+                        minimum=1, maximum=g_batch, value=g_batch, step=1, label="Batch Size", scale=3,
+                        interactive=False
+                    )
+                    interval_slider = gr.Slider(
+                        minimum=0, maximum=2, value=0, step=0.01, label="Interval", scale=3
+                    )
+                    btn_theme_dark = gr.Button("Light Theme", link="?__theme=light", scale=1)
+                    btn_theme_light = gr.Button("Dark Theme", link="?__theme=dark", scale=1)
+
+                btn_change_index.click(
+                    b_change_index,
+                    inputs=[
+                        index_slider,
+                        batchsize_slider,
+                    ],
+                    outputs=[
+                        *g_text_list,
+                        *g_audio_list,
+                        *g_checkbox_list
+                    ],
+                )
+
+                btn_submit_change.click(
+                    b_submit_change,
+                    inputs=[
+                        *g_text_list,
+                    ],
+                    outputs=[
+                        index_slider,
+                        *g_text_list,
+                        *g_audio_list,
+                        *g_checkbox_list
+                    ],
+                )
+
+                btn_previous_index.click(
+                    b_previous_index,
+                    inputs=[
+                        index_slider,
+                        batchsize_slider,
+                    ],
+                    outputs=[
+                        index_slider,
+                        *g_text_list,
+                        *g_audio_list,
+                        *g_checkbox_list
+                    ],
+                )
+
+                btn_next_index.click(
+                    b_next_index,
+                    inputs=[
+                        index_slider,
+                        batchsize_slider,
+                    ],
+                    outputs=[
+                        index_slider,
+                        *g_text_list,
+                        *g_audio_list,
+                        *g_checkbox_list
+                    ],
+                )
+
+                btn_delete_audio.click(
+                    b_delete_audio,
+                    inputs=[
+                        *g_checkbox_list
+                    ],
+                    outputs=[
+                        index_slider,
+                        *g_text_list,
+                        *g_audio_list,
+                        *g_checkbox_list
+                    ]
+                )
+
+                btn_merge_audio.click(
+                    b_merge_audio,
+                    inputs=[
+                        interval_slider,
+                        *g_checkbox_list
+                    ],
+                    outputs=[
+                        index_slider,
+                        *g_text_list,
+                        *g_audio_list,
+                        *g_checkbox_list
+                    ]
+                )
+
+                btn_audio_split.click(
+                    b_audio_split,
+                    inputs=[
+                        splitpoint_slider,
+                        *g_checkbox_list
+                    ],
+                    outputs=[
+                        index_slider,
+                        *g_text_list,
+                        *g_audio_list,
+                        *g_checkbox_list
+                    ]
+                )
+
+                btn_invert_selection.click(
+                    b_invert_selection,
+                    inputs=[
+                        *g_checkbox_list
+                    ],
+                    outputs=[
+                        *g_checkbox_list
+                    ]
+                )
+
+                btn_save_json.click(
+                    b_save_file
+                )
+
+                demo.load(
+                    b_change_index,
+                    inputs=[
+                        index_slider,
+                        batchsize_slider,
+                    ],
+                    outputs=[
+                        *g_text_list,
+                        *g_audio_list,
+                        *g_checkbox_list
+                    ],
+                )
+        with gr.TabItem(i18n("2-GPT-SoVITS-TTS")):
             with gr.Row():
                 exp_name = gr.Textbox(label=i18n("*实验/模型名"), value="xxx", interactive=True)
                 gpu_info = gr.Textbox(label=i18n("显卡信息"), value=gpu_info, visible=True, interactive=False)
@@ -785,7 +1001,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             with gr.TabItem(i18n("1A-训练集格式化工具")):
                 gr.Markdown(value=i18n("输出logs/实验名目录下应有23456开头的文件和文件夹"))
                 with gr.Row():
-                    inp_text = gr.Textbox(label=i18n("*文本标注文件"),value=r"D:\RVC1006\GPT-SoVITS\raw\xxx.list",interactive=True)
+                    inp_text = gr.Textbox(label=i18n("*文本标注文件"),value=r"output/asr_opt/denoise_opt.list",interactive=True)
                     inp_wav_dir = gr.Textbox(
                         label=i18n("*训练集音频文件目录"),
                         # value=r"D:\RVC1006\GPT-SoVITS\raw\xxx",
@@ -859,20 +1075,93 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             with gr.TabItem(i18n("1C-推理")):
                 gr.Markdown(value=i18n("选择训练完存放在SoVITS_weights和GPT_weights下的模型。默认的一个是底模，体验5秒Zero Shot TTS用。"))
                 with gr.Row():
-                    GPT_dropdown = gr.Dropdown(label=i18n("*GPT模型列表"), choices=sorted(GPT_names,key=custom_sort_key),value=pretrained_gpt_name,interactive=True)
-                    SoVITS_dropdown = gr.Dropdown(label=i18n("*SoVITS模型列表"), choices=sorted(SoVITS_names,key=custom_sort_key),value=pretrained_sovits_name,interactive=True)
+                    # GPT_dropdown = gr.Dropdown(label=i18n("*GPT模型列表"), choices=sorted(GPT_names,key=custom_sort_key),value=pretrained_gpt_name,interactive=True)
+                    # SoVITS_dropdown = gr.Dropdown(label=i18n("*SoVITS模型列表"), choices=sorted(SoVITS_names,key=custom_sort_key),value=pretrained_sovits_name,interactive=True)
                     gpu_number_1C=gr.Textbox(label=i18n("GPU卡号,只能填1个整数"), value=gpus, interactive=True)
-                    refresh_button = gr.Button(i18n("刷新模型路径"), variant="primary")
-                    refresh_button.click(fn=change_choices,inputs=[],outputs=[SoVITS_dropdown,GPT_dropdown])
-                with gr.Row():
-                    if_tts = gr.Checkbox(label=i18n("是否开启TTS推理WebUI"), show_label=True)
-                    tts_info = gr.Textbox(label=i18n("TTS推理WebUI进程输出信息"))
-                    if_tts.change(change_tts_inference, [if_tts,bert_pretrained_dir,cnhubert_base_dir,gpu_number_1C,GPT_dropdown,SoVITS_dropdown], [tts_info])
-        with gr.TabItem(i18n("2-GPT-SoVITS-变声")):gr.Markdown(value=i18n("施工中，请静候佳音"))
+                    if_tts = gr.Button("刷新模型参数",variant="primary",visible=True)
+                    if_tts.click(change_tts_inference, [bert_pretrained_dir,cnhubert_base_dir,gpu_number_1C,GPT_dropdown,SoVITS_dropdown])
+                with gr.Blocks(title="GPT-SoVITS WebUI"):
+                    with gr.Group():
+                        gr.Markdown(value=i18n("模型切换"))
+                        with gr.Row():
+                            GPT_dropdown = gr.Dropdown(label=i18n("GPT模型列表"),
+                                                       choices=sorted(GPT_names, key=custom_sort_key), value=gpt_path,
+                                                       interactive=True)
+                            SoVITS_dropdown = gr.Dropdown(label=i18n("SoVITS模型列表"),
+                                                          choices=sorted(SoVITS_names, key=custom_sort_key),
+                                                          value=sovits_path, interactive=True)
+                            refresh_button = gr.Button(i18n("刷新模型路径"), variant="primary")
+                            refresh_button.click(fn=change_choices, inputs=[], outputs=[SoVITS_dropdown, GPT_dropdown])
+                            SoVITS_dropdown.change(change_sovits_weights, [SoVITS_dropdown], [])
+                            GPT_dropdown.change(change_gpt_weights, [GPT_dropdown], [])
+                        gr.Markdown(value=i18n("*请上传并填写参考信息"))
+                        with gr.Row():
+                            inp_ref = gr.Audio(label=i18n("请上传3~10秒内参考音频，超过会报错！"), type="filepath")
+                            with gr.Column():
+                                ref_text_free = gr.Checkbox(label=i18n("开启无参考文本模式。不填参考文本亦相当于开启。"),
+                                                            value=False, interactive=True, show_label=True)
+                                gr.Markdown(i18n(
+                                    "使用无参考文本模式时建议使用微调的GPT，听不清参考音频说的啥(不晓得写啥)可以开，开启后无视填写的参考文本。"))
+                                prompt_text = gr.Textbox(label=i18n("参考音频的文本"), value="")
+                            prompt_language = gr.Dropdown(
+                                label=i18n("参考音频的语种"),
+                                choices=[i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"), i18n("日英混合"),
+                                         i18n("多语种混合")], value=i18n("中文")
+                            )
+                        gr.Markdown(value=i18n("*请填写需要合成的目标文本和语种模式"))
+                        with gr.Row():
+                            text = gr.Textbox(label=i18n("需要合成的文本"), value="")
+                            text_language = gr.Dropdown(
+                                label=i18n("需要合成的语种"),
+                                choices=[i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"), i18n("日英混合"),
+                                         i18n("多语种混合")], value=i18n("中文")
+                            )
+                            how_to_cut = gr.Radio(
+                                label=i18n("怎么切"),
+                                choices=[i18n("不切"), i18n("凑四句一切"), i18n("凑50字一切"), i18n("按中文句号。切"),
+                                         i18n("按英文句号.切"), i18n("按标点符号切"), ],
+                                value=i18n("凑四句一切"),
+                                interactive=True,
+                            )
+                            with gr.Row():
+                                gr.Markdown(value=i18n("gpt采样参数(无参考文本时不要太低)："))
+                                top_k = gr.Slider(minimum=1, maximum=100, step=1, label=i18n("top_k"), value=5,
+                                                  interactive=True)
+                                top_p = gr.Slider(minimum=0, maximum=1, step=0.05, label=i18n("top_p"), value=1,
+                                                  interactive=True)
+                                temperature = gr.Slider(minimum=0, maximum=1, step=0.05, label=i18n("temperature"),
+                                                        value=1, interactive=True)
+                            inference_button = gr.Button(i18n("合成语音"), variant="primary")
+                            output = gr.Audio(label=i18n("输出的语音"))
+
+                        inference_button.click(
+                            get_tts_wav,
+                            [inp_ref, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p,
+                             temperature, ref_text_free],
+                            [output],
+                        )
+
+                        gr.Markdown(value=i18n(
+                            "文本切分工具。太长的文本合成出来效果不一定好，所以太长建议先切。合成会根据文本的换行分开合成再拼起来。"))
+                        with gr.Row():
+                            text_inp = gr.Textbox(label=i18n("需要合成的切分前文本"), value="")
+                            button1 = gr.Button(i18n("凑四句一切"), variant="primary")
+                            button2 = gr.Button(i18n("凑50字一切"), variant="primary")
+                            button3 = gr.Button(i18n("按中文句号。切"), variant="primary")
+                            button4 = gr.Button(i18n("按英文句号.切"), variant="primary")
+                            button5 = gr.Button(i18n("按标点符号切"), variant="primary")
+                            text_opt = gr.Textbox(label=i18n("切分后文本"), value="")
+                            button1.click(cut1, [text_inp], [text_opt])
+                            button2.click(cut2, [text_inp], [text_opt])
+                            button3.click(cut3, [text_inp], [text_opt])
+                            button4.click(cut4, [text_inp], [text_opt])
+                            button5.click(cut5, [text_inp], [text_opt])
+                        gr.Markdown(value=i18n("后续将支持转音素、手工修改音素、语音合成分步执行。"))
+        with gr.TabItem(i18n("3-GPT-SoVITS-变声")):gr.Markdown(value=i18n("施工中，请静候佳音"))
     app.queue(concurrency_count=511, max_size=1022).launch(
         server_name="0.0.0.0",
         inbrowser=True,
         share=is_share,
-        server_port=webui_port_main,
+        server_port=9875,
         quiet=True,
     )

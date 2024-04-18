@@ -1162,6 +1162,6 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
         server_name="0.0.0.0",
         inbrowser=True,
         share=is_share,
-        server_port=9875,
+        server_port=webui_port_main,
         quiet=True,
     )

@@ -18,6 +18,7 @@ RUN apt-get update && \
 WORKDIR /workspace
 COPY requirements.txt /workspace/
 RUN pip install --no-cache-dir -r requirements.txt
+ENV PYTHONPATH /workspace
 
 # Define a build-time argument for image type
 ARG IMAGE_TYPE=full
@@ -37,8 +38,6 @@ RUN if [ "$IMAGE_TYPE" != "elite" ]; then \
 # Copy the rest of the application
 COPY . /workspace
 
-# Copy the rest of the application
-COPY . /workspace
 
 EXPOSE 9871 9872 9873 9874 9880
 

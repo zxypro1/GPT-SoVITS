@@ -3,7 +3,7 @@ import traceback, gradio as gr
 import logging
 from tools.i18n.i18n import I18nAuto
 
-i18n = I18nAuto()
+i18n = I18nAuto(language='zh-CN')
 
 logger = logging.getLogger(__name__)
 import librosa, ffmpeg

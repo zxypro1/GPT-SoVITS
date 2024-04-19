@@ -160,8 +160,6 @@ def change_label(path_list):
                json_key_text="text",
                batch=10)
 
-change_label("output/asr_opt/denoise_opt.list")
-
 def change_uvr5(if_uvr5):
     global p_uvr5
     if(if_uvr5==True and p_uvr5==None):

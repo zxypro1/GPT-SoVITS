@@ -10,12 +10,14 @@ import librosa, ffmpeg
 import soundfile as sf
 import torch
 import sys
+
+from sys import path as syspath
+from os import path as ospath
+syspath.append(ospath.join(ospath.dirname(ospath.realpath(__file__)),'..','uvr5'))
+
 from mdxnet import MDXNetDereverb
 from config import infer_device, is_half, webui_port_uvr5, is_share
 from vr import AudioPre, AudioPreDeEcho
-
-now_dir = os.getcwd()
-sys.path.append(now_dir)
 
 weight_uvr5_root = "tools/uvr5/uvr5_weights"
 uvr5_names = []

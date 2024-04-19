@@ -806,7 +806,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
         with gr.TabItem("1.5-训练语音文本校对"):
             path_list = gr.Textbox(
                 label=i18n(".list标注文件的路径"),
-                value="output/asr_opt/denoise_opt.list",
+                value="/workspace/output/asr_opt/denoise_opt.list",
                 interactive=True,
             )
             # reBtn = gr.Button(
@@ -999,7 +999,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             with gr.TabItem(i18n("1A-训练集格式化工具")):
                 gr.Markdown(value=i18n("输出logs/实验名目录下应有23456开头的文件和文件夹"))
                 with gr.Row():
-                    inp_text = gr.Textbox(label=i18n("*文本标注文件"),value=r"output/asr_opt/denoise_opt.list",interactive=True)
+                    inp_text = gr.Textbox(label=i18n("*文本标注文件"),value=r"/workspace/output/asr_opt/denoise_opt.list",interactive=True)
                     inp_wav_dir = gr.Textbox(
                         label=i18n("*训练集音频文件目录"),
                         # value=r"D:\RVC1006\GPT-SoVITS\raw\xxx",

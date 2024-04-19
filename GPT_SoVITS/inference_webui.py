@@ -74,7 +74,7 @@ from module.mel_processing import spectrogram_torch
 from my_utils import load_audio
 from tools.i18n.i18n import I18nAuto
 
-i18n = I18nAuto()
+i18n = I18nAuto('zh-CN')
 
 # os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'  # 确保直接启动推理UI时也能够设置。
 

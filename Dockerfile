@@ -18,7 +18,7 @@ RUN apt-get update && \
 WORKDIR /workspace
 COPY requirements.txt /workspace/
 RUN pip install --no-cache-dir -r requirements.txt
-ENV PYTHONPATH /workspace
+ENV PYTHONPATH=/workspace
 
 # Define a build-time argument for image type
 ARG IMAGE_TYPE=full

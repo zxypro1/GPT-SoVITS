@@ -1,13 +1,16 @@
-import argparse,os
+import argparse
 import copy
 import json
-import os
+import os, sys
 import uuid
 
 import librosa
 import gradio as gr
 import numpy as np
 import soundfile
+
+now_dir = os.getcwd()
+sys.path.append(now_dir)
 
 g_json_key_text = ""
 g_json_key_path = ""

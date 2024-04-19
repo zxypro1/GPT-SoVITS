@@ -14,6 +14,9 @@ from mdxnet import MDXNetDereverb
 from config import infer_device, is_half, webui_port_uvr5, is_share
 from vr import AudioPre, AudioPreDeEcho
 
+now_dir = os.getcwd()
+sys.path.append(now_dir)
+
 weight_uvr5_root = "tools/uvr5/uvr5_weights"
 uvr5_names = []
 for name in os.listdir(weight_uvr5_root):

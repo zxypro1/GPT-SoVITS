@@ -17,6 +17,9 @@ logging.getLogger("charset_normalizer").setLevel(logging.ERROR)
 logging.getLogger("torchaudio._extension").setLevel(logging.ERROR)
 import pdb
 import torch
+import sys,pdb,re
+now_dir = os.getcwd()
+sys.path.append(now_dir)
 
 if os.path.exists("./gweight.txt"):
     with open("./gweight.txt", 'r', encoding="utf-8") as file:

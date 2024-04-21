@@ -152,13 +152,14 @@ def kill_process(pid):
         kill_proc_tree(pid)
 
 
-def change_label(path_list):
+def change_label(path_list, index_slider, batchsize_slider):
     path_list=str(my_utils.clean_path(path_list))
     set_global(load_json="None",
                load_list=path_list,
                json_key_path="wav_path",
                json_key_text="text",
                batch=10)
+    return b_change_index(index_slider, batchsize_slider)
 
 def change_uvr5(if_uvr5):
     global p_uvr5
@@ -812,7 +813,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             # reBtn = gr.Button(
             #     "刷新",
             # )
-            path_list.change(change_label, [path_list])
+            # path_list.change(change_label, [path_list])
             with gr.Blocks() as demo:
                 with gr.Row():
                     btn_change_index = gr.Button("Change Index / Refresh")
@@ -869,7 +870,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                     btn_theme_light = gr.Button("Dark Theme", link="?__theme=dark", scale=1)
 
                 btn_change_index.click(
-                    b_change_index,
+                    change_label,
                     inputs=[
                         index_slider,
                         batchsize_slider,

@@ -537,8 +537,8 @@ def change_choices():
 
 pretrained_sovits_name = "GPT_SoVITS/pretrained_models/s2G488k.pth"
 pretrained_gpt_name = "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt"
-SoVITS_weight_root = "SoVITS_weights"
-GPT_weight_root = "GPT_weights"
+SoVITS_weight_root = "/mnt/SoVITS_weights"
+GPT_weight_root = "/mnt/GPT_weights"
 os.makedirs(SoVITS_weight_root, exist_ok=True)
 os.makedirs(GPT_weight_root, exist_ok=True)
 

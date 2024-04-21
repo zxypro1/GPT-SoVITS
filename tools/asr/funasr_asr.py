@@ -46,7 +46,7 @@ def execute_asr(input_folder, output_folder, model_size, language):
         except:
             print(traceback.format_exc())
 
-    output_folder = output_folder or "/mnt/output/asr_opt"
+    output_folder = output_folder or "/mnt/auto/output/asr_opt"
     os.makedirs(output_folder, exist_ok=True)
     output_file_path = os.path.abspath(f'{output_folder}/{output_file_name}.list')
 

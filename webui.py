@@ -101,8 +101,8 @@ def get_weights_names():
     for name in os.listdir(GPT_weight_root):
         if name.endswith(".ckpt"): GPT_names.append(name)
     return SoVITS_names,GPT_names
-SoVITS_weight_root="/mnt/SoVITS_weights"
-GPT_weight_root="/mnt/GPT_weights"
+SoVITS_weight_root="/mnt/auto/SoVITS_weights"
+GPT_weight_root="/mnt/auto/GPT_weights"
 os.makedirs(SoVITS_weight_root,exist_ok=True)
 os.makedirs(GPT_weight_root,exist_ok=True)
 SoVITS_names,GPT_names = get_weights_names()
@@ -698,10 +698,10 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                             visible=False,  # 先不开放调整
                         )
                         opt_vocal_root = gr.Textbox(
-                            label=i18n("指定输出主人声文件夹"), value="/mnt/output/uvr5_opt"
+                            label=i18n("指定输出主人声文件夹"), value="/mnt/auto/output/uvr5_opt"
                         )
                         opt_ins_root = gr.Textbox(
-                            label=i18n("指定输出非主人声文件夹"), value="/mnt/output/uvr5_opt"
+                            label=i18n("指定输出非主人声文件夹"), value="/mnt/auto/output/uvr5_opt"
                         )
                         format0 = gr.Radio(
                             label=i18n("导出文件格式"),
@@ -729,8 +729,8 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             gr.Markdown(value=i18n("0a-语音切分工具"))
             with gr.Row():
                 with gr.Row():
-                    slice_inp_path=gr.Textbox(label=i18n("音频自动切分输入路径，可文件可文件夹"),value="/mnt/output/uvr5_opt")
-                    slice_opt_root=gr.Textbox(label=i18n("切分后的子音频的输出根目录"),value="/mnt/output/slicer_opt")
+                    slice_inp_path=gr.Textbox(label=i18n("音频自动切分输入路径，可文件可文件夹"),value="/mnt/auto/output/uvr5_opt")
+                    slice_opt_root=gr.Textbox(label=i18n("切分后的子音频的输出根目录"),value="/mnt/auto/output/slicer_opt")
                     threshold=gr.Textbox(label=i18n("threshold:音量小于这个值视作静音的备选切割点"),value="-34")
                     min_length=gr.Textbox(label=i18n("min_length:每段最小多长，如果第一段太短一直和后面段连起来直到超过这个值"),value="4000")
                     min_interval=gr.Textbox(label=i18n("min_interval:最短切割间隔"),value="300")
@@ -747,8 +747,8 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             with gr.Row():
                 open_denoise_button = gr.Button(i18n("开启语音降噪"), variant="primary",visible=True)
                 close_denoise_button = gr.Button(i18n("终止语音降噪进程"), variant="primary",visible=False)
-                denoise_input_dir=gr.Textbox(label=i18n("降噪音频文件输入文件夹"),value="/mnt/output/slicer_opt")
-                denoise_output_dir=gr.Textbox(label=i18n("降噪结果输出文件夹"),value="/mnt/output/denoise_opt")
+                denoise_input_dir=gr.Textbox(label=i18n("降噪音频文件输入文件夹"),value="/mnt/auto/output/slicer_opt")
+                denoise_output_dir=gr.Textbox(label=i18n("降噪结果输出文件夹"),value="/mnt/auto/output/denoise_opt")
                 denoise_info = gr.Textbox(label=i18n("语音降噪进程输出信息"))
             gr.Markdown(value=i18n("0c-中文批量离线ASR工具"))
             with gr.Row():
@@ -758,12 +758,12 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                     with gr.Row():
                         asr_inp_dir = gr.Textbox(
                             label=i18n("输入文件夹路径"),
-                            value="/mnt/output/denoise_opt",
+                            value="/mnt/auto/output/denoise_opt",
                             interactive=True,
                         )
                         asr_opt_dir = gr.Textbox(
                             label       = i18n("输出文件夹路径"),
-                            value       = "/mnt/output/asr_opt",
+                            value       = "/mnt/auto/output/asr_opt",
                             interactive = True,
                         )
                     with gr.Row():
@@ -807,7 +807,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
         with gr.TabItem("1.5-训练语音文本校对"):
             path_list = gr.Textbox(
                 label=i18n(".list标注文件的路径"),
-                value="/mnt/output/asr_opt/denoise_opt.list",
+                value="/mnt/auto/output/asr_opt/denoise_opt.list",
                 interactive=True,
             )
             # reBtn = gr.Button(
@@ -1000,7 +1000,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             with gr.TabItem(i18n("1A-训练集格式化工具")):
                 gr.Markdown(value=i18n("输出logs/实验名目录下应有23456开头的文件和文件夹"))
                 with gr.Row():
-                    inp_text = gr.Textbox(label=i18n("*文本标注文件"),value=r"/mnt/output/asr_opt/denoise_opt.list",interactive=True)
+                    inp_text = gr.Textbox(label=i18n("*文本标注文件"),value=r"/mnt/auto/output/asr_opt/denoise_opt.list",interactive=True)
                     inp_wav_dir = gr.Textbox(
                         label=i18n("*训练集音频文件目录"),
                         # value=r"D:\RVC1006\GPT-SoVITS\raw\xxx",

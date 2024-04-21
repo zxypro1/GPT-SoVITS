@@ -872,6 +872,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                 btn_change_index.click(
                     change_label,
                     inputs=[
+                        path_list,
                         index_slider,
                         batchsize_slider,
                     ],

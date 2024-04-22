@@ -120,6 +120,8 @@ RESP: 无
 import argparse
 import os,re
 import sys
+now_dir = os.getcwd()
+sys.path.insert(0, now_dir)
 import signal
 import LangSegment
 from time import time as ttime

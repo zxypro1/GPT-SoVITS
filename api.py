@@ -133,15 +133,15 @@ from fastapi.responses import StreamingResponse, JSONResponse
 import uvicorn
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 import numpy as np
-from feature_extractor import cnhubert
+from GPT_SoVITS.feature_extractor import cnhubert
 from io import BytesIO
-from module.models import SynthesizerTrn
-from AR.models.t2s_lightning_module import Text2SemanticLightningModule
-from text import cleaned_text_to_sequence
-from text.cleaner import clean_text
-from module.mel_processing import spectrogram_torch
-from my_utils import load_audio
-import config as global_config
+from GPT_SoVITS.module.models import SynthesizerTrn
+from GPT_SoVITS.AR.models.t2s_lightning_module import Text2SemanticLightningModule
+from GPT_SoVITS.text import cleaned_text_to_sequence
+from GPT_SoVITS.text.cleaner import clean_text
+from GPT_SoVITS.module.mel_processing import spectrogram_torch
+from GPT_SoVITS.my_utils import load_audio
+import tools.config as global_config
 import logging
 import subprocess
 

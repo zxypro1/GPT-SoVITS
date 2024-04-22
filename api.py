@@ -141,7 +141,7 @@ from GPT_SoVITS.text import cleaned_text_to_sequence
 from GPT_SoVITS.text.cleaner import clean_text
 from GPT_SoVITS.module.mel_processing import spectrogram_torch
 from GPT_SoVITS.my_utils import load_audio
-import tools.config as global_config
+import config as global_config
 import logging
 import subprocess
 

@@ -122,6 +122,9 @@ import os,re
 import sys
 now_dir = os.getcwd()
 sys.path.insert(0, now_dir)
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'.','GPT_SoVITS'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'.','tools'))
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)),'.','tools', 'uvr5'))
 import signal
 import LangSegment
 from time import time as ttime

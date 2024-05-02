@@ -399,7 +399,7 @@ def open1Bb(
         gpu_numbers1Ba=gpu_numbers,
         gpu_numbers1a=gpu_numbers,
         gpu_numbers1c=gpu_numbers,
-        pretrained_s1_path=pretrained_s2G,
+        pretrained_s2G_path=pretrained_s2G,
     ):
         yield update
     if(p_train_GPT==None):

@@ -183,6 +183,33 @@ def change_tts_inference(bert_path,cnhubert_base_path,gpu_number,gpt_path,sovits
     os.environ["infer_ttswebui"]=str(webui_port_infer_tts)
     os.environ["is_share"]=str(is_share)
 
+def change_tts_mode(tts_mode):
+    if tts_mode == "模版音频":
+        return {"__type__":"update", "visible":False, "value": None}, {"__type__":"update", "visible":False, "value": None}, {"__type__":"update", "visible":False}, {"__type__":"update", "visible":True, "value": None}
+    else:
+        return {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True}, {"__type__":"update", "visible":False, "value": None}
+
+template_audio_path = {
+    i18n("甄嬛"): "template_audio/zhenhuan.m4a",
+    i18n("蜡笔小新"): "template_audio/labixiaoxin.m4a",
+    i18n("四郎"): "template_audio/silang.m4a"
+}
+
+template_audio_text = {
+    i18n("甄嬛"): "红艳资质平庸，不宜被立为太子，所以为长远计议，四阿哥，是最合",
+    i18n("蜡笔小新"): "我逮捕了怪盗爱睡猫！啊？根本什么都没做嘛。",
+    i18n("四郎"): "此事干系后宫，儿子不敢妄自定夺，更担心皇额娘的安康。"
+}
+
+def change_template_text(template_text):
+    print(template_text)
+    if template_text in template_audio_path:
+        print(template_audio_path[template_text])
+        return {"__type__": "update", "value": template_audio_text[template_text]}, {"__type__": "update", "value": template_audio_path[template_text]}
+    else:
+        return {"__type__": "update", "value": None}, {"__type__": "update", "value": None}
+
+
 from tools.asr.config import asr_dict
 def open_asr(
         model_choose,
@@ -821,6 +848,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                     GPT_dropdown.change(change_gpt_weights, [GPT_dropdown], [])
                 gr.Markdown(value=i18n("*请上传并填写参考信息"))
                 with gr.Row():
+                    tts_mode = gr.Radio(["模版音频", "个人上传"], label="模式", info="使用模版音频还是自己上传？", value="个人上传")
                     inp_ref = gr.Audio(label=i18n("请上传3~10秒内参考音频，超过会报错！"), type="filepath")
                     with gr.Column():
                         prompt_text = gr.Textbox(label=i18n("参考音频的文本"), value="")
@@ -830,6 +858,11 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                                      i18n("日英混合"),
                                      i18n("多语种混合")], value=i18n("中文")
                         )
+                        template_text = gr.Dropdown(
+                            label=i18n("选择默认语音模版"),
+                            choices=template_audio_text.keys(),
+                            visible=False
+                        )
                     with gr.Column():
                         text = gr.Textbox(label=i18n("需要合成的文本"), value="")
                         text_language = gr.Dropdown(
@@ -838,7 +871,8 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                                      i18n("日英混合"),
                                      i18n("多语种混合")], value=i18n("中文")
                         )
-
+                    tts_mode.change(change_tts_mode, inputs=[tts_mode], outputs=[inp_ref ,prompt_text, prompt_language, template_text])
+                    template_text.change(change_template_text, inputs=[template_text], outputs=[prompt_text, inp_ref])
                 with gr.Row():
                     inference_button = gr.Button(i18n("合成语音"), variant="primary")
                     output = gr.Audio(label=i18n("输出的语音"))

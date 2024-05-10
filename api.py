@@ -714,6 +714,16 @@ async def change_refer(
 @app.post("/")
 async def tts_endpoint(request: Request):
     json_post_raw = await request.json()
+    gpt_model_path = json_post_raw.get("gpt_model_path")
+    sovits_model_path = json_post_raw.get("sovits_model_path")
+    if gpt_model_path is not None:
+        gpt_path = gpt_model_path
+        change_gpt_weights(gpt_path)
+        logger.info("gptpath"+gpt_path)
+    if sovits_model_path is not None:
+        sovits_path = sovits_model_path
+        change_sovits_weights(sovits_path)
+        logger.info("vitspath"+sovits_path)
     return handle(
         json_post_raw.get("refer_wav_path"),
         json_post_raw.get("prompt_text"),
@@ -732,7 +742,17 @@ async def tts_endpoint(
         text: str = None,
         text_language: str = None,
         cut_punc: str = None,
+        gpt_model_path: str = None,
+        sovits_model_path: str = None,
 ):
+    if gpt_model_path is not None:
+        gpt_path = gpt_model_path
+        change_gpt_weights(gpt_path)
+        logger.info("gptpath" + gpt_path)
+    if sovits_model_path is not None:
+        sovits_path = sovits_model_path
+        change_sovits_weights(sovits_path)
+        logger.info("vitspath" + sovits_path)
     return handle(refer_wav_path, prompt_text, prompt_language, text, text_language, cut_punc)
 
 

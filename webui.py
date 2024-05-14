@@ -192,13 +192,23 @@ def change_tts_mode(tts_mode):
 template_audio_path = {
     i18n("甄嬛"): "template_audio/zhenhuan.m4a",
     i18n("蜡笔小新"): "template_audio/labixiaoxin.m4a",
-    i18n("四郎"): "template_audio/silang.m4a"
+    i18n("皇上"): "template_audio/silang.m4a",
+    i18n("女恶魔1"): "template_audio/female_demon1.wav",
+    i18n("女恶魔2"): "template_audio/female_demon2.wav",
+    i18n("男恶魔"): "template_audio/male_demon.wav",
+    i18n("高等精灵"): "template_audio/high_elf.wav",
+    i18n("小精灵"): "template_audio/small_elf.wav",
 }
 
 template_audio_text = {
     i18n("甄嬛"): "红艳资质平庸，不宜被立为太子，所以为长远计议，四阿哥，是最合",
     i18n("蜡笔小新"): "我逮捕了怪盗爱睡猫！啊？根本什么都没做嘛。",
-    i18n("四郎"): "此事干系后宫，儿子不敢妄自定夺，更担心皇额娘的安康。"
+    i18n("皇上"): "此事干系后宫，儿子不敢妄自定夺，更担心皇额娘的安康。",
+    i18n("女恶魔1"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    i18n("女恶魔2"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    i18n("男恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    i18n("高等精灵"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    i18n("小精灵"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
 }
 
 def change_template_text(template_text):

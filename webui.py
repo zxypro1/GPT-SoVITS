@@ -835,9 +835,9 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
     )
 
     with gr.Tabs():
-        with gr.TabItem("0-语音克隆生成"):
+        with gr.TabItem("0-语音克隆 && 推理"):
             gr.Markdown(value="## " + i18n(
-                "语音克隆生成"))
+                "语音克隆 && 推理"))
             gr.Markdown(value=i18n(
                 "欢迎使用FC版GPT-SoVITS。<br>快速开始：<br>1. 上传你的语音文件作为参考音频<br>2. 输入这段参考音频的文本和语言<br>3. 输入想要输出的文本<br>4. 选择输出文本的语言<br>点击合成语音，成功克隆自己的声音！"))
             # with gr.Row():
@@ -885,9 +885,9 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                                 visible=False
                             )
                     with gr.Column():
-                        text = gr.Textbox(label=i18n("需要合成的文本"), value="")
+                        text = gr.Textbox(label=i18n("需要生成的文本"), value="")
                         text_language = gr.Dropdown(
-                            label=i18n("需要合成的语种"),
+                            label=i18n("需要生成的语种"),
                             choices=[i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"),
                                      i18n("日英混合"),
                                      i18n("多语种混合")], value=i18n("中文")

@@ -185,16 +185,15 @@ def change_tts_inference(bert_path,cnhubert_base_path,gpu_number,gpt_path,sovits
 
 def change_tts_mode(tts_mode):
     if tts_mode == "模版音频":
-        return {"__type__":"update", "visible":False, "value": None}, {"__type__":"update", "visible":False, "value": None}, {"__type__":"update", "visible":False}, {"__type__":"update", "visible":True, "value": None}
+        return {"__type__":"update", "visible":False, "value": None}, {"__type__":"update", "visible":False, "value": None}, {"__type__":"update", "visible":False}, {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True, "value": None}
     else:
-        return {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True}, {"__type__":"update", "visible":False, "value": None}
+        return {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True}, {"__type__":"update", "visible":False, "value": None}, {"__type__":"update", "visible":False, "value": None}
 
 template_audio_path = {
     i18n("甄嬛"): "template_audio/zhenhuan.m4a",
-    i18n("蜡笔小新"): "template_audio/labixiaoxin.m4a",
     i18n("皇上"): "template_audio/silang.m4a",
-    i18n("女恶魔1"): "template_audio/female_demon1.wav",
-    i18n("女恶魔2"): "template_audio/female_demon2.wav",
+    i18n("红色女恶魔"): "template_audio/female_demon1.wav",
+    i18n("白色女恶魔"): "template_audio/female_demon2.wav",
     i18n("男恶魔"): "template_audio/male_demon.wav",
     i18n("高等精灵"): "template_audio/high_elf.wav",
     i18n("小精灵"): "template_audio/small_elf.wav",
@@ -202,22 +201,29 @@ template_audio_path = {
 
 template_audio_text = {
     i18n("甄嬛"): "红艳资质平庸，不宜被立为太子，所以为长远计议，四阿哥，是最合",
-    i18n("蜡笔小新"): "我逮捕了怪盗爱睡猫！啊？根本什么都没做嘛。",
     i18n("皇上"): "此事干系后宫，儿子不敢妄自定夺，更担心皇额娘的安康。",
-    i18n("女恶魔1"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
-    i18n("女恶魔2"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    i18n("红色女恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    i18n("白色女恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
     i18n("男恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
     i18n("高等精灵"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
     i18n("小精灵"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
 }
 
+template_audio_image = {
+    i18n("甄嬛"): "template_images/niangniang.png",
+    i18n("皇上"): "template_images/huangshang.png",
+    i18n("红色女恶魔"): "template_images/red_demon.png",
+    i18n("白色女恶魔"): "template_images/white_demon.png",
+    i18n("男恶魔"): "template_images/demon.png",
+    i18n("高等精灵"): "template_images/high_elf.png",
+    i18n("小精灵"): "template_images/small_elf.png",
+}
+
 def change_template_text(template_text):
-    print(template_text)
     if template_text in template_audio_path:
-        print(template_audio_path[template_text])
-        return {"__type__": "update", "value": template_audio_text[template_text]}, {"__type__": "update", "value": template_audio_path[template_text]}
+        return {"__type__": "update", "value": template_audio_text[template_text]}, {"__type__": "update", "value": template_audio_path[template_text]}, {"__type__": "update", "value": template_audio_image[template_text]}
     else:
-        return {"__type__": "update", "value": None}, {"__type__": "update", "value": None}
+        return {"__type__": "update", "value": None}, {"__type__": "update", "value": None}, {"__type__": "update", "value": None}
 
 
 from tools.asr.config import asr_dict
@@ -868,11 +874,16 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                                      i18n("日英混合"),
                                      i18n("多语种混合")], value=i18n("中文")
                         )
-                        template_text = gr.Dropdown(
-                            label=i18n("选择默认语音模版"),
-                            choices=template_audio_text.keys(),
-                            visible=False
-                        )
+                        with gr.Row():
+                            template_image = gr.Image(
+                                label=i18n("角色形象"),
+                                visible=False
+                            )
+                            template_text = gr.Dropdown(
+                                label=i18n("选择默认语音模版"),
+                                choices=template_audio_text.keys(),
+                                visible=False
+                            )
                     with gr.Column():
                         text = gr.Textbox(label=i18n("需要合成的文本"), value="")
                         text_language = gr.Dropdown(
@@ -881,8 +892,8 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                                      i18n("日英混合"),
                                      i18n("多语种混合")], value=i18n("中文")
                         )
-                    tts_mode.change(change_tts_mode, inputs=[tts_mode], outputs=[inp_ref ,prompt_text, prompt_language, template_text])
-                    template_text.change(change_template_text, inputs=[template_text], outputs=[prompt_text, inp_ref])
+                    tts_mode.change(change_tts_mode, inputs=[tts_mode], outputs=[inp_ref ,prompt_text, prompt_language, template_text, template_image])
+                    template_text.change(change_template_text, inputs=[template_text], outputs=[prompt_text, inp_ref, template_image])
                 with gr.Row():
                     inference_button = gr.Button(i18n("合成语音"), variant="primary")
                     output = gr.Audio(label=i18n("输出的语音"))

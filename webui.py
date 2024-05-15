@@ -864,25 +864,25 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                     GPT_dropdown.change(change_gpt_weights, [GPT_dropdown], [])
                 gr.Markdown(value=i18n("*请上传并填写参考信息"))
                 with gr.Row():
-                    tts_mode = gr.Radio(["模版音频", "个人上传"], label="模式", info="使用模版音频还是自己上传？", value="个人上传")
-                    inp_ref = gr.Audio(label=i18n("请上传3~10秒内参考音频，超过会报错！"), type="filepath")
+                    tts_mode = gr.Radio(["模版音频", "个人上传"], label="模式", info="使用模版音频还是自己上传？", value="模版音频")
+                    inp_ref = gr.Audio(label=i18n("请上传3~10秒内参考音频，超过会报错！"), type="filepath", visible=False)
                     with gr.Column():
-                        prompt_text = gr.Textbox(label=i18n("参考音频的文本"), value="")
+                        prompt_text = gr.Textbox(label=i18n("参考音频的文本"), value="", visible=False)
                         prompt_language = gr.Dropdown(
                             label=i18n("参考音频的语种"),
                             choices=[i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"),
                                      i18n("日英混合"),
-                                     i18n("多语种混合")], value=i18n("中文")
+                                     i18n("多语种混合")], value=i18n("中文"),
+                            visible=False
                         )
                         with gr.Row():
                             template_image = gr.Image(
-                                label=i18n("角色形象"),
-                                visible=False
+                                show_label=False,
+                                show_download_button=False
                             )
                             template_text = gr.Dropdown(
                                 label=i18n("选择默认语音模版"),
                                 choices=template_audio_text.keys(),
-                                visible=False
                             )
                     with gr.Column():
                         text = gr.Textbox(label=i18n("需要生成的文本"), value="")

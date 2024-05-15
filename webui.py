@@ -190,7 +190,7 @@ def change_tts_mode(tts_mode):
         return {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True}, {"__type__":"update", "visible":False, "value": None}, {"__type__":"update", "visible":False, "value": None}
 
 template_audio_path = {
-    i18n("甄嬛"): "template_audio/zhenhuan.m4a",
+    i18n("娘娘"): "template_audio/zhenhuan.m4a",
     i18n("皇上"): "template_audio/silang.m4a",
     i18n("红色女恶魔"): "template_audio/female_demon1.wav",
     i18n("白色女恶魔"): "template_audio/female_demon2.wav",
@@ -200,7 +200,7 @@ template_audio_path = {
 }
 
 template_audio_text = {
-    i18n("甄嬛"): "红艳资质平庸，不宜被立为太子，所以为长远计议，四阿哥，是最合",
+    i18n("娘娘"): "红艳资质平庸，不宜被立为太子，所以为长远计议，四阿哥，是最合",
     i18n("皇上"): "此事干系后宫，儿子不敢妄自定夺，更担心皇额娘的安康。",
     i18n("红色女恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
     i18n("白色女恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
@@ -210,7 +210,7 @@ template_audio_text = {
 }
 
 template_audio_image = {
-    i18n("甄嬛"): "template_images/niangniang.png",
+    i18n("娘娘"): "template_images/niangniang.png",
     i18n("皇上"): "template_images/huangshang.png",
     i18n("红色女恶魔"): "template_images/red_demon.png",
     i18n("白色女恶魔"): "template_images/white_demon.png",

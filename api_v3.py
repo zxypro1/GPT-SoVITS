@@ -299,12 +299,18 @@ async def tts_handle(req: dict):
                 "media_type": "wav",          # str. media type of the output audio, support "wav", "raw", "ogg", "aac".
                 "streaming_mode": False,      # bool. whether to return a streaming response.
                 "parallel_infer": True,       # bool.(optional) whether to use parallel inference.
-                "repetition_penalty": 1.35    # float.(optional) repetition penalty for T2S model.          
+                "repetition_penalty": 1.35,   # float.(optional) repetition penalty for T2S model.
+                "sovits_weights_path": "",    # str.(optional) SoVITS model weights path.
+                "gpt_weights_path": "" ,      # str.(optional) GPT model weights path
             }
     returns:
         StreamingResponse: audio stream response.
     """
 
+    if req.get("sovits_weights_path") not in [None, ""]:
+        await set_sovits_weights(req.get("sovits_weights_path"))
+    if req.get("gpt_weights_path") not in [None, ""]:
+        await set_gpt_weights(req.get("gpt_weights_path"))
     streaming_mode = req.get("streaming_mode", False)
     media_type = req.get("media_type", "wav")
     tts_infer_yaml_path = req.get("tts_infer_yaml_path", "GPT_SoVITS/configs/tts_infer.yaml")
@@ -384,7 +390,9 @@ async def tts_get_endpoint(
         streaming_mode: bool = False,
         parallel_infer: bool = True,
         repetition_penalty: float = 1.35,
-        tts_infer_yaml_path: str = "GPT_SoVITS/configs/tts_infer.yaml"
+        tts_infer_yaml_path: str = "GPT_SoVITS/configs/tts_infer.yaml",
+        sovits_weights_path: str = None,
+        gpt_weights_path: str = None,
 ):
     req = {
         "text": text,
@@ -406,7 +414,9 @@ async def tts_get_endpoint(
         "streaming_mode": streaming_mode,
         "parallel_infer": parallel_infer,
         "repetition_penalty": float(repetition_penalty),
-        "tts_infer_yaml_path": tts_infer_yaml_path
+        "tts_infer_yaml_path": tts_infer_yaml_path,
+        "sovits_weights_path": sovits_weights_path,
+        "gpt_weights_path": gpt_weights_path,
     }
 
     return await tts_handle(req)

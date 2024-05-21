@@ -158,7 +158,9 @@ class TTS_Request(BaseModel):
     streaming_mode: bool = False
     parallel_infer: bool = True
     repetition_penalty: float = 1.35
-    tts_infer_yaml_path: str = None
+    tts_infer_yaml_path: str = None,
+    sovits_weights_path: str = None,
+    gpt_weights_path: str = None,
     """推理时需要加载的声音模型的yaml配置文件路径，如：GPT_SoVITS/configs/tts_infer.yaml"""
 
 
@@ -337,7 +339,7 @@ async def tts_handle(req: dict):
                     media_type = "raw"
                 for sr, chunk in tts_generator:
                     yield pack_audio(BytesIO(), chunk, sr, media_type).getvalue()
-                move_to_cpu(tts_instance)
+                # move_to_cpu(tts_instance)
 
             # _media_type = f"audio/{media_type}" if not (streaming_mode and media_type in ["wav", "raw"]) else f"audio/x-{media_type}"
             return StreamingResponse(streaming_generator(tts_generator, media_type, ), media_type=f"audio/{media_type}")
@@ -345,7 +347,7 @@ async def tts_handle(req: dict):
         else:
             sr, audio_data = next(tts_generator)
             audio_data = pack_audio(BytesIO(), audio_data, sr, media_type).getvalue()
-            move_to_cpu(tts_instance)
+            # move_to_cpu(tts_instance)
             return Response(audio_data, media_type=f"audio/{media_type}")
     except Exception as e:
         return JSONResponse(status_code=400, content={"message": f"tts failed", "Exception": str(e)})

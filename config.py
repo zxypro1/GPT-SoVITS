@@ -48,7 +48,7 @@ class Config:
     def __init__(self):
         self.sovits_path = sovits_path
         self.gpt_path = gpt_path
-        self.is_half = is_half
+        self.is_half = False
 
         self.cnhubert_path = cnhubert_path
         self.bert_path = bert_path

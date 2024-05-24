@@ -37,7 +37,7 @@ language_code_list = [
 def execute_asr(input_folder, output_folder, model_size, language, precision):
     if '-local' in model_size:
         model_size = model_size[:-6]
-        model_path = f'tools/asr/models/faster-whisper-{model_size}'
+        model_path = f'tools/asr/models/faster-whisper-{model_size}' if os.path.exists(f'tools/asr/models/faster-whisper-{model_size}') else os.environ['download_path'] + f'tools/asr/models/faster-whisper-{model_size}'
     else:
         model_path = model_size
     if language == 'auto':

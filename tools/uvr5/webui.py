@@ -20,8 +20,13 @@ from config import infer_device, is_half, webui_port_uvr5, is_share
 from vr import AudioPre, AudioPreDeEcho
 
 weight_uvr5_root = "tools/uvr5/uvr5_weights"
+weight_uvr5_add = os.environ['download_path'] + weight_uvr5_root
 uvr5_names = []
 for name in os.listdir(weight_uvr5_root):
+    if name.endswith(".pth") or "onnx" in name:
+        uvr5_names.append(name.replace(".pth", ""))
+
+for name in os.listdir(weight_uvr5_add):
     if name.endswith(".pth") or "onnx" in name:
         uvr5_names.append(name.replace(".pth", ""))
 
@@ -30,6 +35,11 @@ is_half = is_half
 webui_port_uvr5 = webui_port_uvr5
 is_share = is_share
 
+def get_model_path(model_name):
+    if os.path.exists(os.path.join(weight_uvr5_root, model_name + ".pth")):
+        return os.path.join(weight_uvr5_root, model_name + ".pth")
+    if os.path.exists(os.path.join(weight_uvr5_add, model_name + ".pth")):
+        return os.path.join(weight_uvr5_add, model_name + ".pth")
 
 def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format0):
     infos = []
@@ -48,7 +58,7 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
             func = AudioPre if "DeEcho" not in model_name else AudioPreDeEcho
             pre_fun = func(
                 agg=int(agg),
-                model_path=os.path.join(weight_uvr5_root, model_name + ".pth"),
+                model_path=get_model_path(model_name),
                 device=device,
                 is_half=is_half,
             )

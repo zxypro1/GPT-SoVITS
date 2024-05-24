@@ -26,9 +26,10 @@ for name in os.listdir(weight_uvr5_root):
     if name.endswith(".pth") or "onnx" in name:
         uvr5_names.append(name.replace(".pth", ""))
 
-for name in os.listdir(weight_uvr5_add):
-    if name.endswith(".pth") or "onnx" in name:
-        uvr5_names.append(name.replace(".pth", ""))
+if os.path.exists(weight_uvr5_add):
+    for name in os.listdir(weight_uvr5_add):
+        if name.endswith(".pth") or "onnx" in name:
+            uvr5_names.append(name.replace(".pth", ""))
 
 device = infer_device
 is_half = is_half

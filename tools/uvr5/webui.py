@@ -20,7 +20,7 @@ from config import infer_device, is_half, webui_port_uvr5, is_share
 from vr import AudioPre, AudioPreDeEcho
 
 weight_uvr5_root = "tools/uvr5/uvr5_weights"
-weight_uvr5_add = os.environ['download_path'] + weight_uvr5_root
+weight_uvr5_add = os.environ['download_path'] + '/' + weight_uvr5_root
 uvr5_names = []
 for name in os.listdir(weight_uvr5_root):
     if name.endswith(".pth") or "onnx" in name:

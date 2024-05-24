@@ -14,7 +14,7 @@ def check_fw_local_models():
     for i, size in enumerate(model_size_list):
         if os.path.exists(f'tools/asr/models/faster-whisper-{size}'):
             model_size_list[i] = size + '-local'
-        if os.path.exists(os.environ['download_path'] + f'tools/asr/models/faster-whisper-{size}'):
+        if os.path.exists(os.environ['download_path'] + f'/tools/asr/models/faster-whisper-{size}'):
             model_size_list[i] = size + '-nas-local'
     return model_size_list
 

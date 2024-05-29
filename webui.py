@@ -5,6 +5,7 @@ import json,yaml,warnings,torch
 import platform
 import psutil
 import signal
+from datetime import datetime
 from tools.subfix_webui import *
 from tools.uvr5.webui import *
 from GPT_SoVITS.inference_webui import *
@@ -190,29 +191,30 @@ def change_tts_mode(tts_mode):
         return {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True, "value": None}, {"__type__":"update", "visible":True}, {"__type__":"update", "visible":False, "value": None}, {"__type__":"update", "visible":False, "value": None}
 
 template_audio_path = {
-    i18n("娘娘"): "template_audio/zhenhuan.m4a",
-    i18n("皇上"): "template_audio/silang.m4a",
-    i18n("红色女恶魔"): "template_audio/female_demon1.wav",
-    i18n("白色女恶魔"): "template_audio/female_demon2.wav",
-    i18n("男恶魔"): "template_audio/male_demon.wav",
-    i18n("高等精灵"): "template_audio/high_elf.wav",
+    # i18n("红色女恶魔"): "template_audio/female_demon1.wav",
+    # i18n("白色女恶魔"): "template_audio/female_demon2.wav",
+    # i18n("男恶魔"): "template_audio/male_demon.wav",
+    # i18n("高等精灵"): "template_audio/high_elf.wav",
     i18n("小精灵"): "template_audio/small_elf.wav",
+    i18n("甜美女声"): "template_audio/serverless_goddess.wav",
 }
 
 template_audio_text = {
-    i18n("红色女恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
-    i18n("白色女恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
-    i18n("男恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
-    i18n("高等精灵"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    # i18n("红色女恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    # i18n("白色女恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    # i18n("男恶魔"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    # i18n("高等精灵"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
     i18n("小精灵"): "《三国演义》由东汉末年黄巾起义末期开始描写，至西晋初期国家重归统一结束。",
+    i18n("甜美女声"): "函数计算是事件驱动的全托管计算服务。通过函数计算，您无需管理服务器等基础设施。",
 }
 
 template_audio_image = {
-    i18n("红色女恶魔"): "template_images/red_demon.png",
-    i18n("白色女恶魔"): "template_images/white_demon.png",
-    i18n("男恶魔"): "template_images/demon.png",
-    i18n("高等精灵"): "template_images/high_elf.png",
+    # i18n("红色女恶魔"): "template_images/red_demon.png",
+    # i18n("白色女恶魔"): "template_images/white_demon.png",
+    # i18n("男恶魔"): "template_images/demon.png",
+    # i18n("高等精灵"): "template_images/high_elf.png",
     i18n("小精灵"): "template_images/small_elf.png",
+    i18n("甜美女声"): "template_images/serverless_goddess.png",
 }
 
 def change_template_text(template_text):
@@ -809,6 +811,25 @@ def open1abc(inp_text,inp_wav_dir,exp_name,gpu_numbers1a,gpu_numbers1Ba,gpu_numb
     else:
         yield "已有正在进行的一键三连任务，需先终止才能开启下一次任务", {"__type__": "update", "visible": False}, {"__type__": "update", "visible": True}
 
+#### 新方法
+def change_inp_ref(inp_ref):
+    if inp_ref == "" or inp_ref == None: return
+    output_dir = os.environ["download_path"] + '/upload_files/'
+    os.makedirs(output_dir, exist_ok=True)
+    # 获取当前时间戳
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # 获取上传的文件名
+    base_name = os.path.splitext(os.path.basename(inp_ref))[0]
+
+    # 生成新的文件名
+    new_filename = f"{base_name}_{timestamp}.wav"
+    output_path = os.path.join(output_dir, new_filename)
+
+    # 将上传的音频文件保存到新的文件名
+    shutil.copy(inp_ref, output_path)
+    print(f"上传音频文件已保存到: {output_path}")
+
 def close1abc():
     global ps1abc
     if (ps1abc != []):
@@ -861,7 +882,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                 gr.Markdown(value=i18n("*请上传并填写参考信息"))
                 with gr.Row():
                     tts_mode = gr.Radio(["模版音频", "个人上传"], label="模式", info="使用模版音频还是自己上传？", value="模版音频")
-                    inp_ref = gr.Audio(label=i18n("请上传3~10秒内参考音频，超过会报错！"), type="filepath", visible=False)
+                    inp_ref = gr.Audio(label=i18n("请上传3~10秒内参考音频，超过会报错！"), type="filepath", visible=False, value=template_audio_path[i18n("小精灵")])
                     with gr.Column():
                         prompt_text = gr.Textbox(label=i18n("参考音频的文本"), value="", visible=False)
                         prompt_language = gr.Dropdown(
@@ -874,11 +895,13 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                         with gr.Row():
                             template_image = gr.Image(
                                 show_label=False,
-                                show_download_button=False
+                                show_download_button=False,
+                                value=template_audio_image[i18n("小精灵")]
                             )
                             template_text = gr.Dropdown(
                                 label=i18n("选择默认语音模版"),
                                 choices=template_audio_text.keys(),
+                                value=i18n("小精灵")
                             )
                     with gr.Column():
                         text = gr.Textbox(label=i18n("需要生成的文本"), value="")
@@ -888,6 +911,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                                      i18n("日英混合"),
                                      i18n("多语种混合")], value=i18n("中文")
                         )
+                    inp_ref.change(change_inp_ref, inputs=[inp_ref])
                     tts_mode.change(change_tts_mode, inputs=[tts_mode], outputs=[inp_ref ,prompt_text, prompt_language, template_text, template_image])
                     template_text.change(change_template_text, inputs=[template_text], outputs=[prompt_text, inp_ref, template_image])
                 with gr.Row():

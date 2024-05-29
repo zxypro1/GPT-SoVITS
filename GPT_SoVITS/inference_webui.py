@@ -18,6 +18,8 @@ logging.getLogger("torchaudio._extension").setLevel(logging.ERROR)
 import pdb
 import torch
 import sys,pdb,re
+import soundfile as sf
+from datetime import datetime
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 
@@ -435,9 +437,18 @@ def get_tts_wav(ref_wav_path, prompt_text, prompt_language, text, text_language,
         audio_opt.append(zero_wav)
         t4 = ttime()
     print("%.3f\t%.3f\t%.3f\t%.3f" % (t1 - t0, t2 - t1, t3 - t2, t4 - t3))
-    yield hps.data.sampling_rate, (np.concatenate(audio_opt, 0) * 32768).astype(
-        np.int16
-    )
+    final_audio = np.concatenate(audio_opt, 0) * 32768
+    # 保存生成的音频文件
+
+    base_name = os.path.splitext(os.path.basename(ref_wav_path))[0]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = f"{os.environ['download_path']}/result/" # 确保使用一个有效的目录
+    os.makedirs(output_dir, exist_ok=True)  # 如果目录不存在，则创建
+    output_file = os.path.join(output_dir, f"{base_name}_{timestamp}.wav")
+    sf.write(output_file, final_audio.astype(np.int16), hps.data.sampling_rate)
+    print(f"音频文件已保存到: {output_file}")
+
+    yield hps.data.sampling_rate, final_audio.astype(np.int16)
 
 
 def split(todo_text):

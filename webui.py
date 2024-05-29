@@ -817,13 +817,12 @@ def change_inp_ref(inp_ref):
     output_dir = os.environ["download_path"] + '/upload_files/'
     os.makedirs(output_dir, exist_ok=True)
     # 获取当前时间戳
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # 获取上传的文件名
     base_name = os.path.splitext(os.path.basename(inp_ref))[0]
 
     # 生成新的文件名
-    new_filename = f"{base_name}_{timestamp}.wav"
+    new_filename = f"{base_name}.wav"
     output_path = os.path.join(output_dir, new_filename)
 
     # 将上传的音频文件保存到新的文件名

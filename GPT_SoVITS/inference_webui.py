@@ -146,7 +146,10 @@ else:
 
 def change_sovits_weights(sovits_path):
     global vq_model, hps
-    dict_s2 = torch.load(sovits_path, map_location="cpu")
+    try:
+        dict_s2 = torch.load(sovits_path, map_location="cpu")
+    except:
+        dict_s2 = torch.load(os.path.join(os.environ['download_path'] + '/SoVITS_weights', sovits_path), map_location="cpu")
     hps = dict_s2["config"]
     hps = DictToAttrRecursive(hps)
     hps.model.semantic_frame_rate = "25hz"
@@ -174,7 +177,10 @@ change_sovits_weights(sovits_path)
 def change_gpt_weights(gpt_path):
     global hz, max_sec, t2s_model, config
     hz = 50
-    dict_s1 = torch.load(gpt_path, map_location="cpu")
+    try:
+        dict_s1 = torch.load(gpt_path, map_location="cpu")
+    except:
+        dict_s1 = torch.load(os.path.join(os.environ['download_path'] + '/GPT_weights', gpt_path), map_location="cpu")
     config = dict_s1["config"]
     max_sec = config["data"]["max_sec"]
     t2s_model = Text2SemanticLightningModule(config, "****", is_train=False)

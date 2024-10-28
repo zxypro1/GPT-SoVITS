@@ -12,6 +12,7 @@ nltk.download('averaged_perceptron_tagger_eng')
 import os
 import zipfile
 import shutil
+import requests
 
 # 获取当前文件的路径
 current_file_path = os.path.abspath(__file__)

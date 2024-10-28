@@ -174,8 +174,8 @@ for i in range(2):
         _[-1].append(pretrained_sovits_name[i])
 pretrained_gpt_name,pretrained_sovits_name = _
 
-SoVITS_weight_root=["SoVITS_weights_v2","SoVITS_weights", "mnt/{}/SoVITS_weights".format(os.environ.get("download_path","root"))]
-GPT_weight_root=["GPT_weights_v2","GPT_weights", "mnt/{}/GPT_weights".format(os.environ.get("download_path","root"))]
+SoVITS_weight_root=["SoVITS_weights_v2","SoVITS_weights", "{}/SoVITS_weights".format(os.environ.get("download_path","root"))]
+GPT_weight_root=["GPT_weights_v2","GPT_weights", "{}/GPT_weights".format(os.environ.get("download_path","root"))]
 for path in SoVITS_weight_root+GPT_weight_root:
     os.makedirs(path,exist_ok=True)
 

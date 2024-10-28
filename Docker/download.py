@@ -4,6 +4,9 @@ model_dir = snapshot_download('damo/speech_paraformer-large_asr_nat-zh-cn-16k-co
 model_dir = snapshot_download('damo/speech_fsmn_vad_zh-cn-16k-common-pytorch',revision="v2.0.4")
 model_dir = snapshot_download('damo/punc_ct-transformer_zh-cn-common-vocab272727-pytorch',revision="v2.0.4")
 
+import nltk
+nltk.download('averaged_perceptron_tagger_eng')
+
 # Download https://paddlespeech.bj.bcebos.com/Parakeet/released_models/g2p/G2PWModel_1.1.zip unzip and rename to G2PWModel, and then place them in GPT_SoVITS/text.
 
 import os

@@ -10,14 +10,17 @@ nltk.download('averaged_perceptron_tagger_eng')
 # Download https://paddlespeech.bj.bcebos.com/Parakeet/released_models/g2p/G2PWModel_1.1.zip unzip and rename to G2PWModel, and then place them in GPT_SoVITS/text.
 
 import os
-import requests
 import zipfile
 import shutil
 
+# 获取当前文件的路径
+current_file_path = os.path.abspath(__file__)
+current_dir = os.path.dirname(current_file_path)
+
 # 定义下载链接和目标路径
 url = 'https://paddlespeech.bj.bcebos.com/Parakeet/released_models/g2p/G2PWModel_1.1.zip'
-download_path = 'G2PWModel_1.1.zip'
-target_dir = '../GPT_SoVITS/text'
+download_path = os.path.join(current_dir, 'G2PWModel_1.1.zip')
+target_dir = os.path.join(current_dir, '../GPT_SoVITS/text/')
 
 # 下载文件
 response = requests.get(url)
@@ -26,15 +29,15 @@ with open(download_path, 'wb') as file:
 
 # 解压文件
 with zipfile.ZipFile(download_path, 'r') as zip_ref:
-    zip_ref.extractall('.')
+    zip_ref.extractall(current_dir)
 
 # 重命名解压后的文件夹
-os.rename('G2PWModel_1.1', 'G2PWModel')
+os.rename(os.path.join(current_dir, 'G2PWModel_1.1'), os.path.join(current_dir, 'G2PWModel'))
 
 # 移动文件夹到目标目录
 if not os.path.exists(target_dir):
     os.makedirs(target_dir)
-shutil.move('G2PWModel', target_dir)
+shutil.move(os.path.join(current_dir, 'G2PWModel'), target_dir)
 
 # 清理临时文件
 os.remove(download_path)

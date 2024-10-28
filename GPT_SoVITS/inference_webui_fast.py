@@ -48,7 +48,7 @@ from TTS_infer_pack.TTS import TTS, TTS_Config
 from TTS_infer_pack.text_segmentation_method import get_method
 from tools.i18n.i18n import I18nAuto, scan_language_list
 
-language=os.environ.get("language","zh")
+language=os.environ.get("language","zh_CN")
 language=sys.argv[-1] if sys.argv[-1] in scan_language_list() else language
 i18n = I18nAuto(language=language)
 
@@ -174,8 +174,8 @@ for i in range(2):
         _[-1].append(pretrained_sovits_name[i])
 pretrained_gpt_name,pretrained_sovits_name = _
 
-SoVITS_weight_root=["SoVITS_weights_v2","SoVITS_weights"]
-GPT_weight_root=["GPT_weights_v2","GPT_weights"]
+SoVITS_weight_root=["SoVITS_weights_v2","SoVITS_weights", "mnt/{}/SoVITS_weights".format(os.environ.get("download_path","root"))]
+GPT_weight_root=["GPT_weights_v2","GPT_weights", "mnt/{}/GPT_weights".format(os.environ.get("download_path","root"))]
 for path in SoVITS_weight_root+GPT_weight_root:
     os.makedirs(path,exist_ok=True)
 
@@ -214,7 +214,7 @@ def change_sovits_weights(sovits_path,prompt_language=None,text_language=None):
 
 
 
-with gr.Blocks(title="GPT-SoVITS WebUI") as app:
+with gr.Blocks(title="GPT-SoVITS 推理 WebUI") as app:
     gr.Markdown(
         value=i18n("本软件以MIT协议开源, 作者不对软件具备任何控制力, 使用软件者、传播软件导出的声音者自负全责. <br>如不认可该条款, 则不能使用或引用软件包内任何代码和文件. 详见根目录<b>LICENSE</b>.")
     )

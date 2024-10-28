@@ -39,6 +39,8 @@ POST:
     "seed": -1,                   # int. random seed for reproducibility.
     "parallel_infer": True,       # bool. whether to use parallel inference.
     "repetition_penalty": 1.35    # float. repetition penalty for T2S model.
+    "sovits_weights_path": ""     # str.(optional) path to the sovits weights file.
+    "gpt_weights_path": ""        # str.(optional) path to the gpt weights file.
 }
 ```
 
@@ -294,7 +296,9 @@ async def tts_handle(req:dict):
                 "media_type": "wav",          # str. media type of the output audio, support "wav", "raw", "ogg", "aac".
                 "streaming_mode": False,      # bool. whether to return a streaming response.
                 "parallel_infer": True,       # bool.(optional) whether to use parallel inference.
-                "repetition_penalty": 1.35    # float.(optional) repetition penalty for T2S model.          
+                "repetition_penalty": 1.35    # float.(optional) repetition penalty for T2S model.  
+                "sovits_weights_path": ""     # str.(optional) path to the sovits weights file.
+                "gpt_weights_path": ""        # str.(optional) path to the gpt weights file.        
             }
     returns:
         StreamingResponse: audio stream response.
@@ -303,6 +307,8 @@ async def tts_handle(req:dict):
     streaming_mode = req.get("streaming_mode", False)
     return_fragment = req.get("return_fragment", False)
     media_type = req.get("media_type", "wav")
+    sovits_weights_path = req.get("sovits_weights_path", None)
+    gpt_weights_path = req.get("gpt_weights_path", None)
 
     check_res = check_params(req)
     if check_res is not None:
@@ -310,6 +316,12 @@ async def tts_handle(req:dict):
 
     if streaming_mode or return_fragment:
         req["return_fragment"] = True
+
+    if sovits_weights_path is not None:
+        set_sovits_weights(sovits_weights_path)
+    
+    if gpt_weights_path is not None:
+        set_gpt_weights(gpt_weights_path)
     
     try:
         tts_generator=tts_pipeline.run(req)

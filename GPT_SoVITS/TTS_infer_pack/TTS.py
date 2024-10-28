@@ -26,6 +26,7 @@ from tools.my_utils import load_audio
 from module.mel_processing import spectrogram_torch
 from TTS_infer_pack.text_segmentation_method import splits
 from TTS_infer_pack.TextPreprocessor import TextPreprocessor
+import soundfile as sf
 language=os.environ.get("language","Auto")
 language=sys.argv[-1] if sys.argv[-1] in scan_language_list() else language
 i18n = I18nAuto(language=language)
@@ -1000,6 +1001,10 @@ class TTS:
             
         audio = np.concatenate(audio, 0)
         audio = (audio * 32768).astype(np.int16) 
+        # save audio to a file
+        output_wav_path = os.path.join(os.environ.get("download_path"), "result/output{}.wav".format(os.times().user))
+        sf.write(output_wav_path, audio, sr)
+        print(i18n("音频已保存至：{}").format(output_wav_path))
         
         # try:
         #     if speed_factor != 1.0:

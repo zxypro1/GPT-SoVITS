@@ -1,102 +1,3 @@
-"""
-# WebAPI文档
-
-` python api_v2.py -a 127.0.0.1 -p 9880 -c GPT_SoVITS/configs/tts_infer.yaml `
-
-## 执行参数:
-    `-a` - `绑定地址, 默认"127.0.0.1"`
-    `-p` - `绑定端口, 默认9880`
-    `-c` - `TTS配置文件路径, 默认"GPT_SoVITS/configs/tts_infer.yaml"`
-
-## 调用:
-
-### 推理
-
-endpoint: `/tts`
-GET:
-```
-http://127.0.0.1:9880/tts?text=先帝创业未半而中道崩殂，今天下三分，益州疲弊，此诚危急存亡之秋也。&text_lang=zh&ref_audio_path=archive_jingyuan_1.wav&prompt_lang=zh&prompt_text=我是「罗浮」云骑将军景元。不必拘谨，「将军」只是一时的身份，你称呼我景元便可&text_split_method=cut5&batch_size=1&media_type=wav&streaming_mode=true
-```
-
-POST:
-```json
-{
-    "text": "",                   # str.(required) text to be synthesized
-    "text_lang: "",               # str.(required) language of the text to be synthesized
-    "ref_audio_path": "",         # str.(required) reference audio path
-    "aux_ref_audio_paths": [],    # list.(optional) auxiliary reference audio paths for multi-speaker tone fusion
-    "prompt_text": "",            # str.(optional) prompt text for the reference audio
-    "prompt_lang": "",            # str.(required) language of the prompt text for the reference audio
-    "top_k": 5,                   # int. top k sampling
-    "top_p": 1,                   # float. top p sampling
-    "temperature": 1,             # float. temperature for sampling
-    "text_split_method": "cut0",  # str. text split method, see text_segmentation_method.py for details.
-    "batch_size": 1,              # int. batch size for inference
-    "batch_threshold": 0.75,      # float. threshold for batch splitting.
-    "split_bucket: True,          # bool. whether to split the batch into multiple buckets.
-    "speed_factor":1.0,           # float. control the speed of the synthesized audio.
-    "streaming_mode": False,      # bool. whether to return a streaming response.
-    "seed": -1,                   # int. random seed for reproducibility.
-    "parallel_infer": True,       # bool. whether to use parallel inference.
-    "repetition_penalty": 1.35    # float. repetition penalty for T2S model.
-    "sovits_weights_path": ""     # str.(optional) path to the sovits weights file.
-    "gpt_weights_path": ""        # str.(optional) path to the gpt weights file.
-}
-```
-
-RESP:
-成功: 直接返回 wav 音频流， http code 200
-失败: 返回包含错误信息的 json, http code 400
-
-### 命令控制
-
-endpoint: `/control`
-
-command:
-"restart": 重新运行
-"exit": 结束运行
-
-GET:
-```
-http://127.0.0.1:9880/control?command=restart
-```
-POST:
-```json
-{
-    "command": "restart"
-}
-```
-
-RESP: 无
-
-
-### 切换GPT模型
-
-endpoint: `/set_gpt_weights`
-
-GET:
-```
-http://127.0.0.1:9880/set_gpt_weights?weights_path=GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt
-```
-RESP: 
-成功: 返回"success", http code 200
-失败: 返回包含错误信息的 json, http code 400
-
-
-### 切换Sovits模型
-
-endpoint: `/set_sovits_weights`
-
-GET:
-```
-http://127.0.0.1:9880/set_sovits_weights?weights_path=GPT_SoVITS/pretrained_models/s2G488k.pth
-```
-
-RESP: 
-成功: 返回"success", http code 200
-失败: 返回包含错误信息的 json, http code 400
-    
-"""
 import os
 import sys
 import traceback
@@ -107,20 +8,16 @@ sys.path.append(now_dir)
 sys.path.append("%s/GPT_SoVITS" % (now_dir))
 
 import argparse
-import subprocess
-import wave
 import signal
 import numpy as np
 import soundfile as sf
-from fastapi import FastAPI, Request, HTTPException, Response
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi import FastAPI, UploadFile, File
 import uvicorn
-from io import BytesIO
 from tools.i18n.i18n import I18nAuto
 from GPT_SoVITS.TTS_infer_pack.TTS import TTS, TTS_Config
 from GPT_SoVITS.TTS_infer_pack.text_segmentation_method import get_method_names as get_cut_method_names
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from tools.my_utils import load_audio, check_for_existance, check_details, clean_path
 from config import python_exec, exp_root, is_half
@@ -151,6 +48,8 @@ config_path = args.tts_config
 port = args.port
 host = args.bind_addr
 argv = sys.argv
+# determine device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 if config_path in [None, ""]:
     config_path = "GPT-SoVITS/configs/tts_infer.yaml"
@@ -160,319 +59,6 @@ print(tts_config)
 tts_pipeline = TTS(tts_config)
 
 APP = FastAPI()
-class TTS_Request(BaseModel):
-    text: str = None
-    text_lang: str = None
-    ref_audio_path: str = None
-    aux_ref_audio_paths: list = None
-    prompt_lang: str = None
-    prompt_text: str = ""
-    top_k:int = 5
-    top_p:float = 1
-    temperature:float = 1
-    text_split_method:str = "cut5"
-    batch_size:int = 1
-    batch_threshold:float = 0.75
-    split_bucket:bool = True
-    speed_factor:float = 1.0
-    fragment_interval:float = 0.3
-    seed:int = -1
-    media_type:str = "wav"
-    streaming_mode:bool = False
-    parallel_infer:bool = True
-    repetition_penalty:float = 1.35
-
-### modify from https://github.com/RVC-Boss/GPT-SoVITS/pull/894/files
-def pack_ogg(io_buffer:BytesIO, data:np.ndarray, rate:int):
-    with sf.SoundFile(io_buffer, mode='w', samplerate=rate, channels=1, format='ogg') as audio_file:
-        audio_file.write(data)
-    return io_buffer
-
-
-def pack_raw(io_buffer:BytesIO, data:np.ndarray, rate:int):
-    io_buffer.write(data.tobytes())
-    return io_buffer
-
-
-def pack_wav(io_buffer:BytesIO, data:np.ndarray, rate:int):
-    io_buffer = BytesIO()
-    sf.write(io_buffer, data, rate, format='wav')
-    return io_buffer
-
-def pack_aac(io_buffer:BytesIO, data:np.ndarray, rate:int):
-    process = subprocess.Popen([
-        'ffmpeg',
-        '-f', 's16le',  # 输入16位有符号小端整数PCM
-        '-ar', str(rate),  # 设置采样率
-        '-ac', '1',  # 单声道
-        '-i', 'pipe:0',  # 从管道读取输入
-        '-c:a', 'aac',  # 音频编码器为AAC
-        '-b:a', '192k',  # 比特率
-        '-vn',  # 不包含视频
-        '-f', 'adts',  # 输出AAC数据流格式
-        'pipe:1'  # 将输出写入管道
-    ], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, _ = process.communicate(input=data.tobytes())
-    io_buffer.write(out)
-    return io_buffer
-
-def pack_audio(io_buffer:BytesIO, data:np.ndarray, rate:int, media_type:str):
-    if (media_type == "ogg"):
-        io_buffer = pack_ogg(io_buffer, data, rate)
-    elif (media_type == "aac"):
-        io_buffer = pack_aac(io_buffer, data, rate)
-    elif (media_type == "wav"):
-        io_buffer = pack_wav(io_buffer, data, rate)
-    else:
-        io_buffer = pack_raw(io_buffer, data, rate)
-    io_buffer.seek(0)
-    return io_buffer
-
-
-
-# from https://huggingface.co/spaces/coqui/voice-chat-with-mistral/blob/main/app.py
-def wave_header_chunk(frame_input=b"", channels=1, sample_width=2, sample_rate=32000):
-    # This will create a wave header then append the frame input
-    # It should be first on a streaming wav file
-    # Other frames better should not have it (else you will hear some artifacts each chunk start)
-    wav_buf = BytesIO()
-    with wave.open(wav_buf, "wb") as vfout:
-        vfout.setnchannels(channels)
-        vfout.setsampwidth(sample_width)
-        vfout.setframerate(sample_rate)
-        vfout.writeframes(frame_input)
-
-    wav_buf.seek(0)
-    return wav_buf.read()
-
-
-def handle_control(command:str):
-    if command == "restart":
-        os.execl(sys.executable, sys.executable, *argv)
-    elif command == "exit":
-        os.kill(os.getpid(), signal.SIGTERM)
-        exit(0)
-
-
-def check_params(req:dict):
-    text:str = req.get("text", "")
-    text_lang:str = req.get("text_lang", "")
-    ref_audio_path:str = req.get("ref_audio_path", "")
-    streaming_mode:bool = req.get("streaming_mode", False)
-    media_type:str = req.get("media_type", "wav")
-    prompt_lang:str = req.get("prompt_lang", "")
-    text_split_method:str = req.get("text_split_method", "cut5")
-
-    if ref_audio_path in [None, ""]:
-        return JSONResponse(status_code=400, content={"message": "ref_audio_path is required"})
-    if text in [None, ""]:
-        return JSONResponse(status_code=400, content={"message": "text is required"})
-    if (text_lang in [None, ""]) :
-        return JSONResponse(status_code=400, content={"message": "text_lang is required"})
-    elif text_lang.lower() not in tts_config.languages:
-        return JSONResponse(status_code=400, content={"message": f"text_lang: {text_lang} is not supported in version {tts_config.version}"})
-    if (prompt_lang in [None, ""]) :
-        return JSONResponse(status_code=400, content={"message": "prompt_lang is required"})
-    elif prompt_lang.lower() not in tts_config.languages:
-        return JSONResponse(status_code=400, content={"message": f"prompt_lang: {prompt_lang} is not supported in version {tts_config.version}"})
-    if media_type not in ["wav", "raw", "ogg", "aac"]:
-        return JSONResponse(status_code=400, content={"message": f"media_type: {media_type} is not supported"})
-    elif media_type == "ogg" and  not streaming_mode:
-        return JSONResponse(status_code=400, content={"message": "ogg format is not supported in non-streaming mode"})
-    
-    if text_split_method not in cut_method_names:
-        return JSONResponse(status_code=400, content={"message": f"text_split_method:{text_split_method} is not supported"})
-
-    return None
-
-async def tts_handle(req:dict):
-    """
-    Text to speech handler.
-    
-    Args:
-        req (dict): 
-            {
-                "text": "",                   # str.(required) text to be synthesized
-                "text_lang: "",               # str.(required) language of the text to be synthesized
-                "ref_audio_path": "",         # str.(required) reference audio path
-                "aux_ref_audio_paths": [],    # list.(optional) auxiliary reference audio paths for multi-speaker synthesis
-                "prompt_text": "",            # str.(optional) prompt text for the reference audio
-                "prompt_lang": "",            # str.(required) language of the prompt text for the reference audio
-                "top_k": 5,                   # int. top k sampling
-                "top_p": 1,                   # float. top p sampling
-                "temperature": 1,             # float. temperature for sampling
-                "text_split_method": "cut5",  # str. text split method, see text_segmentation_method.py for details.
-                "batch_size": 1,              # int. batch size for inference
-                "batch_threshold": 0.75,      # float. threshold for batch splitting.
-                "split_bucket: True,          # bool. whether to split the batch into multiple buckets.
-                "speed_factor":1.0,           # float. control the speed of the synthesized audio.
-                "fragment_interval":0.3,      # float. to control the interval of the audio fragment.
-                "seed": -1,                   # int. random seed for reproducibility.
-                "media_type": "wav",          # str. media type of the output audio, support "wav", "raw", "ogg", "aac".
-                "streaming_mode": False,      # bool. whether to return a streaming response.
-                "parallel_infer": True,       # bool.(optional) whether to use parallel inference.
-                "repetition_penalty": 1.35    # float.(optional) repetition penalty for T2S model.  
-                "sovits_weights_path": ""     # str.(optional) path to the sovits weights file.
-                "gpt_weights_path": ""        # str.(optional) path to the gpt weights file.        
-            }
-    returns:
-        StreamingResponse: audio stream response.
-    """
-    
-    streaming_mode = req.get("streaming_mode", False)
-    return_fragment = req.get("return_fragment", False)
-    media_type = req.get("media_type", "wav")
-    sovits_weights_path = req.get("sovits_weights_path", None)
-    gpt_weights_path = req.get("gpt_weights_path", None)
-
-    check_res = check_params(req)
-    if check_res is not None:
-        return check_res
-
-    if streaming_mode or return_fragment:
-        req["return_fragment"] = True
-
-    if sovits_weights_path is not None:
-        set_sovits_weights(sovits_weights_path)
-    
-    if gpt_weights_path is not None:
-        set_gpt_weights(gpt_weights_path)
-    
-    try:
-        tts_generator=tts_pipeline.run(req)
-        
-        if streaming_mode:
-            def streaming_generator(tts_generator:Generator, media_type:str):
-                if media_type == "wav":
-                    yield wave_header_chunk()
-                    media_type = "raw"
-                for sr, chunk in tts_generator:
-                    yield pack_audio(BytesIO(), chunk, sr, media_type).getvalue()
-            # _media_type = f"audio/{media_type}" if not (streaming_mode and media_type in ["wav", "raw"]) else f"audio/x-{media_type}"
-            return StreamingResponse(streaming_generator(tts_generator, media_type, ), media_type=f"audio/{media_type}")
-    
-        else:
-            sr, audio_data = next(tts_generator)
-            audio_data = pack_audio(BytesIO(), audio_data, sr, media_type).getvalue()
-            return Response(audio_data, media_type=f"audio/{media_type}")
-    except Exception as e:
-        return JSONResponse(status_code=400, content={"message": f"tts failed", "Exception": str(e)})
-    
-
-
-
-
-
-@APP.get("/control")
-async def control(command: str = None):
-    if command is None:
-        return JSONResponse(status_code=400, content={"message": "command is required"})
-    handle_control(command)
-
-
-
-@APP.get("/tts")
-async def tts_get_endpoint(
-                        text: str = None,
-                        text_lang: str = None,
-                        ref_audio_path: str = None,
-                        aux_ref_audio_paths:list = None,
-                        prompt_lang: str = None,
-                        prompt_text: str = "",
-                        top_k:int = 5,
-                        top_p:float = 1,
-                        temperature:float = 1,
-                        text_split_method:str = "cut0",
-                        batch_size:int = 1,
-                        batch_threshold:float = 0.75,
-                        split_bucket:bool = True,
-                        speed_factor:float = 1.0,
-                        fragment_interval:float = 0.3,
-                        seed:int = -1,
-                        media_type:str = "wav",
-                        streaming_mode:bool = False,
-                        parallel_infer:bool = True,
-                        repetition_penalty:float = 1.35
-                        ):
-    req = {
-        "text": text,
-        "text_lang": text_lang.lower(),
-        "ref_audio_path": ref_audio_path,
-        "aux_ref_audio_paths": aux_ref_audio_paths,
-        "prompt_text": prompt_text,
-        "prompt_lang": prompt_lang.lower(),
-        "top_k": top_k,
-        "top_p": top_p,
-        "temperature": temperature,
-        "text_split_method": text_split_method,
-        "batch_size":int(batch_size),
-        "batch_threshold":float(batch_threshold),
-        "speed_factor":float(speed_factor),
-        "split_bucket":split_bucket,
-        "fragment_interval":fragment_interval,
-        "seed":seed,
-        "media_type":media_type,
-        "streaming_mode":streaming_mode,
-        "parallel_infer":parallel_infer,
-        "repetition_penalty":float(repetition_penalty)
-    }
-    return await tts_handle(req)
-                
-
-@APP.post("/tts")
-async def tts_post_endpoint(request: TTS_Request):
-    req = request.dict()
-    return await tts_handle(req)
-
-
-@APP.get("/set_refer_audio")
-async def set_refer_aduio(refer_audio_path: str = None):
-    try:
-        tts_pipeline.set_ref_audio(refer_audio_path)
-    except Exception as e:
-        return JSONResponse(status_code=400, content={"message": f"set refer audio failed", "Exception": str(e)})
-    return JSONResponse(status_code=200, content={"message": "success"})
-
-
-# @APP.post("/set_refer_audio")
-# async def set_refer_aduio_post(audio_file: UploadFile = File(...)):
-#     try:
-#         # 检查文件类型，确保是音频文件
-#         if not audio_file.content_type.startswith("audio/"):
-#             return JSONResponse(status_code=400, content={"message": "file type is not supported"})
-        
-#         os.makedirs("uploaded_audio", exist_ok=True)
-#         save_path = os.path.join("uploaded_audio", audio_file.filename)
-#         # 保存音频文件到服务器上的一个目录
-#         with open(save_path , "wb") as buffer:
-#             buffer.write(await audio_file.read())
-            
-#         tts_pipeline.set_ref_audio(save_path)
-#     except Exception as e:
-#         return JSONResponse(status_code=400, content={"message": f"set refer audio failed", "Exception": str(e)})
-#     return JSONResponse(status_code=200, content={"message": "success"})
-
-@APP.get("/set_gpt_weights")
-async def set_gpt_weights(weights_path: str = None):
-    try:
-        if weights_path in ["", None]:
-            return JSONResponse(status_code=400, content={"message": "gpt weight path is required"})
-        tts_pipeline.init_t2s_weights(weights_path)
-    except Exception as e:
-        return JSONResponse(status_code=400, content={"message": f"change gpt weight failed", "Exception": str(e)})
-
-    return JSONResponse(status_code=200, content={"message": "success"})
-
-
-@APP.get("/set_sovits_weights")
-async def set_sovits_weights(weights_path: str = None):
-    try:
-        if weights_path in ["", None]:
-            return JSONResponse(status_code=400, content={"message": "sovits weight path is required"})
-        tts_pipeline.init_vits_weights(weights_path)
-    except Exception as e:
-        return JSONResponse(status_code=400, content={"message": f"change sovits weight failed", "Exception": str(e)})
-    return JSONResponse(status_code=200, content={"message": "success"})
 
 version="v2"
 weight_uvr5_root = "tools/uvr5/uvr5_weights"
@@ -591,71 +177,63 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
     yield "\n".join(infos)
 
 class UVRRequest(BaseModel):
-    model_name: str  # 模型名称
-    inp_root: str  # 输入文件夹路径
-    save_root_vocal: str  # 保存人声文件夹路径
-    paths: list  # 文件路径列表
-    save_root_ins: str  # 保存伴奏文件夹路径
-    agg: int  # 聚合参数
-    format0: str  # 文件格式
-    device: str  # 设备
-    is_half: bool
+    model_name: str  # UVR模型名称
+    inp_dir: str  # 输入文件夹路径
+    opt_dir_vocal: str  # 保存人声文件夹路径
+    opt_dir_ins: str  # 保存伴奏文件夹路径
+    agg: int = 0  # 人声提取激进程度，0-20的整数
+    format0: str  # 文件格式。可选："wav", "flac", "mp3", "m4a"
 
-@APP.post("/uvr_convert")
+@APP.post("/uvr")
 async def uvr_convert(request: UVRRequest):
     request = request.dict()
     try:
         model_name = request.model_name
-        inp_root = request.inp_root
-        save_root_vocal = request.save_root_vocal
-        paths = request.paths
-        save_root_ins = request.save_root_ins
+        inp_root = request.inp_dir
+        save_root_vocal = request.opt_dir_vocal
+        paths = ""
+        save_root_ins = request.opt_dir_ins
         agg = request.agg
         format0 = request.format0
-        device = request.device
-        is_half = request.is_half
+        device = device
+        is_half = is_half
 
         if model_name not in uvr5_names:
-            return JSONResponse(status_code=400, content={"message": f"model_name: {model_name} is not supported"})
+            return JSONResponse(status_code=400, content={"error": f"model_name: {model_name} is not supported"})
 
         response = []
         async for info in uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format0, device, is_half):
             response.append(info)
         
-        return JSONResponse(status_code=200, content={"message": "success", "details": response})
+        return JSONResponse(status_code=200, content={"opt_dir_ins": save_root_ins, "opt_dir_vocal": save_root_vocal})
     except Exception as e:
-        return JSONResponse(status_code=400, content={"message": "uvr_convert failed", "Exception": str(e)})
+        return JSONResponse(status_code=400, content={"error": f"uvr_convert failed \n Exception: {str(e)}"})
 
 class SliceRequest(BaseModel):
-    threshold: str  # 阈值
-    min_length: str  # 最小长度
-    min_interval: str  # 最小间隔
-    hop_size: str  # 跳跃大小
-    max_sil_kept: str  # 最大保留静音
-    _max: float  # 最大值
-    alpha: float  # 阿尔法值
-    n_parts: int  # 分片数量
+    inp_dir: str # 输入文件夹路径
+    opt_dir: str # 输出文件夹路径
+    threshold: int  # 阈值（db），音量小于这个值视作静音的备选切割点
+    min_length: int  # 最小长度（ms），每段最小多长，如果第一段太短一直和后面段连起来直到超过这个值
+    min_interval: int  # 最小间隔（ms），最短切割间隔
+    hop_size: int  # 跳跃大小，决定怎么算音量曲线，越小精度越大计算量越高（不是精度越大效果越好）
+    max_sil_kept: int  # 最大保留静音（ms），切完后静音最多留多长
+    _max: float  # 最大值（0.0-1.0），归一化后最大值多少
+    alpha: float  # 阿尔法值（0.0-1.0），混多少比例归一化后音频进来
+    n_process: int  # 使用进程数（1-12）
 
 @APP.post("/slice_audio")
-async def slice_audio(request: SliceRequest, audio_file: UploadFile = File(...)):
+async def slice_audio(request: SliceRequest):
     try:
         # 创建临时目录保存上传的文件和输出文件
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_path = os.path.join(temp_dir, audio_file.filename)
-            with open(temp_file_path, "wb") as temp_file:
-                shutil.copyfileobj(audio_file.file, temp_file)
-            
-            # 检查文件是否存在
-            if not os.path.exists(temp_file_path):
-                return JSONResponse(status_code=400, content={"message": "Input file does not exist"})
-            
+            inp = my_utils.clean_path(request.inp_dir)
+            opt_root = my_utils.clean_path(request.opt_dir)
             # 创建输出文件夹
-            output_dir = os.path.join(temp_dir, "output")
-            os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(opt_root, exist_ok=True)
             
             ps_slice = []
-            for i_part in range(request.n_parts):
-                cmd = f'"{python_exec}" tools/slice_audio.py "{temp_file_path}" "{output_dir}" {request.threshold} {request.min_length} {request.min_interval} {request.hop_size} {request.max_sil_kept} {request._max} {request.alpha} {i_part} {request.n_parts}'
+            for i_part in range(request.n_process):
+                cmd = f'"{python_exec}" tools/slice_audio.py "{inp}" "{opt_root}" {request.threshold} {request.min_length} {request.min_interval} {request.hop_size} {request.max_sil_kept} {request._max} {request.alpha} {i_part} {request.n_parts}'
                 p = Popen(cmd, shell=True)
                 ps_slice.append(p)
             
@@ -663,120 +241,100 @@ async def slice_audio(request: SliceRequest, audio_file: UploadFile = File(...))
                 p.wait()
             
             # 假设处理后的文件名为 output.wav
-            output_file_path = os.path.join(output_dir, "output.wav")
+            output_file_path = os.path.join(opt_root, "output.wav")
             if not os.path.exists(output_file_path):
-                return JSONResponse(status_code=400, content={"message": "Output file does not exist"})
+                return JSONResponse(status_code=400, content={"error": "Output file does not exist"})
             
-            return FileResponse(output_file_path, media_type="audio/wav", filename="output.wav")
+            return JSONResponse(status_code=200, content={"opt_dir": f"{opt_root}"})
     except Exception as e:
-        return JSONResponse(status_code=400, content={"message": "Slicing failed", "Exception": str(e)})
+        return JSONResponse(status_code=400, content={"error": f"Slicing failed. \n Exception: {str(e)}"})
 
 class DenoiseRequest(BaseModel):
-    pass  # 不再需要输入文件夹路径
+    inp_dir: str  # 输入文件夹路径
+    opt_dir: str  # 输出文件夹路径
 
 @APP.post("/denoise_audio")
-async def denoise_audio(request: DenoiseRequest, audio_file: UploadFile = File(...)):
+async def denoise_audio(request: DenoiseRequest):
     try:
         # 创建临时目录保存上传的文件和输出文件
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_path = os.path.join(temp_dir, audio_file.filename)
-            with open(temp_file_path, "wb") as temp_file:
-                shutil.copyfileobj(audio_file.file, temp_file)
-            
-            # 检查文件是否存在
-            if not os.path.exists(temp_file_path):
-                return JSONResponse(status_code=400, content={"message": "Input file does not exist"})
-            
+            inp = my_utils.clean_path(request.inp_dir)
+            opt_root = my_utils.clean_path(request.opt_dir)
             # 创建输出文件夹
-            output_dir = os.path.join(temp_dir, "output")
-            os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(opt_root, exist_ok=True)
             
             # 构建命令
-            cmd = f'"{python_exec}" tools/cmd-denoise.py -i "{temp_file_path}" -o "{output_dir}" -p {"float16" if is_half else "float32"}'
+            cmd = f'"{python_exec}" tools/cmd-denoise.py -i "{inp}" -o "{opt_root}" -p {"float16" if is_half else "float32"}'
             p = Popen(cmd, shell=True)
             p.wait()
             
             # 假设处理后的文件名为 output.wav
-            output_file_path = os.path.join(output_dir, "output.wav")
+            output_file_path = os.path.join(opt_root, "output.wav")
             if not os.path.exists(output_file_path):
-                return JSONResponse(status_code=400, content={"message": "Output file does not exist"})
+                return JSONResponse(status_code=400, content={"error": "Output file does not exist"})
             
-            return FileResponse(output_file_path, media_type="audio/wav", filename="output.wav")
+            return JSONResponse(status_code=200, content={"opt_dir": f"{opt_root}"})
     except Exception as e:
-        return JSONResponse(status_code=400, content={"message": "Denoising failed", "Exception": str(e)})
+        return JSONResponse(status_code=400, content={"error": f"Denoising failed \n Exception: {str(e)}"})
 
 class ASRRequest(BaseModel):
+    inp_dir: str  # 输入文件夹路径
+    opt_dir: str  # 输出文件夹路径
     model: str  # 模型名称
     model_size: str  # 模型大小
     lang: str  # 语言
     precision: str  # 精度
 
 @APP.post("/asr")
-async def asr(request: ASRRequest, audio_file: UploadFile = File(...)):
+async def asr(request: ASRRequest):
     try:
         # 创建临时目录保存上传的文件和输出文件
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_path = os.path.join(temp_dir, audio_file.filename)
-            with open(temp_file_path, "wb") as temp_file:
-                shutil.copyfileobj(audio_file.file, temp_file)
-            
-            # 检查文件是否存在
-            if not os.path.exists(temp_file_path):
-                return JSONResponse(status_code=400, content={"message": "Input file does not exist"})
-            
+            inp = my_utils.clean_path(request.inp_dir)
+            opt_root = my_utils.clean_path(request.opt_dir)
             # 创建输出文件夹
-            output_dir = os.path.join(temp_dir, "output")
-            os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(opt_root, exist_ok=True)
             
             # 构建命令
-            cmd = f'"{python_exec}" tools/asr/{asr_dict[request.model]["path"]} -i "{temp_file_path}" -o "{output_dir}" -s {request.model_size} -l {request.lang} -p {request.precision}'
+            cmd = f'"{python_exec}" tools/asr/{asr_dict[request.model]["path"]} -i "{inp}" -o "{opt_root}" -s {request.model_size} -l {request.lang} -p {request.precision}'
             p = Popen(cmd, shell=True)
             p.wait()
             
             # 假设处理后的文件名为 output.txt
-            output_file_path = os.path.join(output_dir, "output.txt")
+            output_file_path = os.path.join(opt_root, "output.txt")
             if not os.path.exists(output_file_path):
                 return JSONResponse(status_code=400, content={"message": "Output file does not exist"})
             
-            return FileResponse(output_file_path, media_type="text/plain", filename="output.txt")
+            return JSONResponse(status_code=200, content={"opt_text_dir": f"{opt_root}", "opt_dir": f"{inp}"})
     except Exception as e:
-        return JSONResponse(status_code=400, content={"message": "ASR task failed", "Exception": str(e)})
+        return JSONResponse(status_code=400, content={"error": f"ASR task failed \n Exception: {str(e)}"})
 
 class OneClickRequest(BaseModel):
-    inp_text: str  # 输入文本路径
-    exp_name: str  # 实验名称
-    gpu_numbers1a: str  # GPU编号1a
-    gpu_numbers1Ba: str  # GPU编号1Ba
-    gpu_numbers1c: str  # GPU编号1c
-    bert_pretrained_dir: str  # BERT预训练模型路径
-    ssl_pretrained_dir: str  # SSL预训练模型路径
-    pretrained_s2G_path: str  # 预训练S2G模型路径
+    inp_text: str  # 文本标注的路径，参考asr任务的输出
+    inp_dir: str  # 输入音频文件夹路径，参考asr任务的输出
+    opt_dir: str  # 输出结果文件夹
+    gpu_numbers1a: str  # 文本获取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0-0
+    gpu_numbers1Ba: str  # SSL自监督特征提取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0-0
+    gpu_numbers1c: str  # 语义token提取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0-0
+    bert_pretrained_dir: str  # 预训练的中文BERT模型路径
+    ssl_pretrained_dir: str  # 预训练的SSL模型路径
+    pretrained_s2G_path: str  # 预训练的SoVITS-G模型路径
 
 @APP.post("/one_click")
-async def one_click(request: OneClickRequest, audio_file: UploadFile = File(...)):
+async def one_click(request: OneClickRequest):
     try:
         # 创建临时目录保存上传的文件和输出文件
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_path = os.path.join(temp_dir, audio_file.filename)
-            with open(temp_file_path, "wb") as temp_file:
-                shutil.copyfileobj(audio_file.file, temp_file)
-            
-            # 检查文件是否存在
-            if not os.path.exists(temp_file_path):
-                return JSONResponse(status_code=400, content={"message": "Input file does not exist"})
-            
+            inp = my_utils.clean_path(request.inp_dir)
+            opt_root = my_utils.clean_path(request.opt_dir)
             # 创建输出文件夹
-            output_dir = os.path.join(temp_dir, "output")
-            os.makedirs(output_dir, exist_ok=True)
-            
-            # 设置输入文件夹路径为临时目录
-            inp_wav_dir = temp_dir
+            os.makedirs(opt_root, exist_ok=True)
             
             # 处理逻辑
             inp_text = my_utils.clean_path(request.inp_text)
-            if check_for_existance([inp_text, inp_wav_dir], is_dataset_processing=True):
-                check_details([inp_text, inp_wav_dir], is_dataset_processing=True)
-            opt_dir = f"{output_dir}/{request.exp_name}"
+            if check_for_existance([inp_text, inp], is_dataset_processing=True):
+                check_details([inp_text, inp], is_dataset_processing=True)
+            opt_dir = opt_root
             os.makedirs(opt_dir, exist_ok=True)
             
             ps1abc = []
@@ -785,8 +343,8 @@ async def one_click(request: OneClickRequest, audio_file: UploadFile = File(...)
             if not os.path.exists(path_text) or (os.path.exists(path_text) and len(open(path_text, "r", encoding="utf8").read().strip("\n").split("\n")) < 2):
                 config = {
                     "inp_text": inp_text,
-                    "inp_wav_dir": inp_wav_dir,
-                    "exp_name": request.exp_name,
+                    "inp_wav_dir": inp,
+                    "exp_name": opt_dir,
                     "opt_dir": opt_dir,
                     "bert_pretrained_dir": request.bert_pretrained_dir,
                     "is_half": str(is_half)
@@ -819,8 +377,8 @@ async def one_click(request: OneClickRequest, audio_file: UploadFile = File(...)
             # 1b
             config = {
                 "inp_text": inp_text,
-                "inp_wav_dir": inp_wav_dir,
-                "exp_name": request.exp_name,
+                "inp_wav_dir": inp,
+                "exp_name": opt_dir,
                 "opt_dir": opt_dir,
                 "cnhubert_base_dir": request.ssl_pretrained_dir,
             }
@@ -845,7 +403,7 @@ async def one_click(request: OneClickRequest, audio_file: UploadFile = File(...)
             if not os.path.exists(path_semantic) or (os.path.exists(path_semantic) and os.path.getsize(path_semantic) < 31):
                 config = {
                     "inp_text": inp_text,
-                    "exp_name": request.exp_name,
+                    "exp_name": opt_dir,
                     "opt_dir": opt_dir,
                     "pretrained_s2G": request.pretrained_s2G_path,
                     "s2config_path": "GPT_SoVITS/configs/s2.json",
@@ -874,30 +432,32 @@ async def one_click(request: OneClickRequest, audio_file: UploadFile = File(...)
                     f.write("\n".join(opt) + "\n")
             
             ps1abc = []
-            return JSONResponse(status_code=200, content={"message": "One-click process completed"})
+            return JSONResponse(status_code=200, content={"opt_dir": f"{opt_root}"})
     except Exception as e:
-        return JSONResponse(status_code=400, content={"message": "One-click process failed", "Exception": str(e)})
+        return JSONResponse(status_code=400, content={"error": f"One-click process failed \n Exception: {str(e)}"})
 
 class TrainRequest(BaseModel):
+    data_dir: str  # 训练数据文件夹路径
+    opt_dir: str  # 模型输出文件夹
     batch_size: int  # 批处理大小
     total_epoch: int  # 总训练轮数
-    exp_name: str  # 实验名称
-    text_low_lr_rate: float  # 文本低学习率
+    model_name: str  # 模型名称
+    text_low_lr_rate: float  # 文本模块学习率权重
     if_save_latest: bool  # 是否保存最新模型
     if_save_every_weights: bool  # 是否保存每个权重
     save_every_epoch: int  # 每多少轮保存一次
     gpu_numbers: str  # GPU编号
-    pretrained_s2G: str = None  # 预训练S2G模型路径
-    pretrained_s2D: str = None  # 预训练S2D模型路径
-    pretrained_s1: str = None  # 预训练S1模型路径
-    if_dpo: bool = False  # 是否使用DPO
+    pretrained_s2G: str  # 预训练S2G模型路径
+    pretrained_s2D: str  # 预训练S2D模型路径
+    pretrained_s1: str  # 预训练S1模型路径
+    notice_url: str  # 消息发送URL
 
 @APP.post("/train_sovits")
 async def train_sovits(request: TrainRequest):
     try:
         with open("GPT_SoVITS/configs/s2.json") as f:
             data = json.loads(f.read())
-        s2_dir = f"{exp_root}/{request.exp_name}"
+        s2_dir = my_utils.clean_path(request.opt_dir)
         os.makedirs(f"{s2_dir}/logs_s2", exist_ok=True)
         if check_for_existance([s2_dir], is_train=True):
             check_details([s2_dir], is_train=True)
@@ -914,23 +474,21 @@ async def train_sovits(request: TrainRequest):
         data["train"]["save_every_epoch"] = request.save_every_epoch
         data["train"]["gpu_numbers"] = request.gpu_numbers
         data["model"]["version"] = version
-        data["data"]["exp_dir"] = data["s2_ckpt_dir"] = s2_dir
-        data["save_weight_dir"] = SoVITS_weight_root[-int(version[-1]) + 2]
-        data["name"] = request.exp_name
+        data["data"]["exp_dir"] = s2_dir
+        data["save_weight_dir"] = os.path.join(s2_dir, "SoVITS_weights")
+        data["name"] = request.model_name
         data["version"] = version
         tmp_config_path = f"{tmp}/tmp_s2.json"
         with open(tmp_config_path, "w") as f:
             f.write(json.dumps(data))
-        
-        await request.send(JSONResponse(status_code=200, content={"message": "SoVITS training started"}))
 
         cmd = f'"{python_exec}" GPT_SoVITS/s2_train.py --config "{tmp_config_path}"'
-        p = Popen(cmd, shell=True)
-        p.wait()
+        Popen(cmd, shell=True)
 
-        return JSONResponse(status_code=200, content={"message": "SoVITS training completed"})
+        # TODO: taskId 
+        return JSONResponse(status_code=200, content={"message": "SoVITS training started", "taskId": "train_sovits", "opt_file": os.path.join(s2_dir, "SoVITS_weights")})
     except Exception as e:
-        return JSONResponse(status_code=400, content={"message": "SoVITS training failed", "Exception": str(e)})
+        return JSONResponse(status_code=400, content={"error": f"SoVITS training failed\n Exception: {str(e)}"})
 
 @APP.post("/train_gpt")
 async def train_gpt(request: TrainRequest):
@@ -938,7 +496,7 @@ async def train_gpt(request: TrainRequest):
         config_file = "GPT_SoVITS/configs/s1longer.yaml" if version == "v1" else "GPT_SoVITS/configs/s1longer-v2.yaml"
         with open(config_file) as f:
             data = yaml.load(f.read(), Loader=yaml.FullLoader)
-        s1_dir = f"{exp_root}/{request.exp_name}"
+        s1_dir = my_utils.clean_path(request.opt_dir)
         os.makedirs(f"{s1_dir}/logs_s1", exist_ok=True)
         if check_for_existance([s1_dir], is_train=True):
             check_details([s1_dir], is_train=True)
@@ -951,9 +509,9 @@ async def train_gpt(request: TrainRequest):
         data["train"]["save_every_n_epoch"] = request.save_every_epoch
         data["train"]["if_save_every_weights"] = request.if_save_every_weights
         data["train"]["if_save_latest"] = request.if_save_latest
-        data["train"]["if_dpo"] = request.if_dpo
+        data["train"]["if_dpo"] = False
         data["train"]["half_weights_save_dir"] = GPT_weight_root[-int(version[-1]) + 2]
-        data["train"]["exp_name"] = request.exp_name
+        data["train"]["exp_name"] = s1_dir
         data["train_semantic_path"] = f"{s1_dir}/6-name2semantic.tsv"
         data["train_phoneme_path"] = f"{s1_dir}/2-name2text.txt"
         data["output_dir"] = f"{s1_dir}/logs_s1"
@@ -962,14 +520,11 @@ async def train_gpt(request: TrainRequest):
         tmp_config_path = f"{tmp}/tmp_s1.yaml"
         with open(tmp_config_path, "w") as f:
             f.write(yaml.dump(data, default_flow_style=False))
-
-        await request.send(JSONResponse(status_code=200, content={"message": "GPT training started"}))
         
         cmd = f'"{python_exec}" GPT_SoVITS/s1_train.py --config_file "{tmp_config_path}"'
-        p = Popen(cmd, shell=True)
-        p.wait()
+        Popen(cmd, shell=True)
         
-        return JSONResponse(status_code=200, content={"message": "GPT training completed"})
+        return JSONResponse(status_code=200, content={"message": "GPT training started", "taskId": "train_gpt", "opt_file": os.path.join(s1_dir, "GPT_weights")})
     except Exception as e:
         return JSONResponse(status_code=400, content={"message": "GPT training failed", "Exception": str(e)})
 
@@ -1008,56 +563,84 @@ tmp = os.path.join(now_dir, "TEMP")  # 临时目录路径
 """
 # API 文档
 
-## `POST /uvr_convert`
-
+## `POST /uvr`
 **描述**: 执行 UVR 转换任务。
 
 **请求体**:
+
 ```json
 {
-  "model_name": "string",  // 模型名称
-  "inp_root": "string",  // 输入文件夹路径
-  "save_root_vocal": "string",  // 保存人声文件夹路径
-  "paths": ["string"],  // 文件路径列表
-  "save_root_ins": "string",  // 保存伴奏文件夹路径
-  "agg": 0,  // 聚合参数
-  "format0": "string"  // 文件格式
+  "inp_dir": "string", // 输入文件夹路径
+  "model_name": "string",  // UVR模型名称，可选：onnx_dereverb_By_FoxJoy, HP5_only_main_vocal, HP3_all_vocals, HP2_all_vocals, VR-DeEchoNormal, VR-DeEchoAggressive, VR-DeEchoDeReverb
+  "opt_dir_vocal": "string",  // 保存人声文件夹路径
+  "opt_dir_ins": "string",  // 保存伴奏文件夹路径
+  "agg": 0,  // （可选）人声提取激进程度，0-20的整数
+  "format0": "string"  // 文件格式。可选："wav", "flac", "mp3", "m4a"
 }
 ```
 
 **响应**:
-- 成功: 返回 `200` 状态码和转换详情。
-- 失败: 返回 `400` 状态码和错误信息。
+
++ 成功: 返回 `200` 状态码和输出文件夹路径。
+
+```json
+{
+  "opt_dir_ins": "string",
+  "opt_dir_vocal": "string"
+}
+```
+
++ 失败: 返回 `400` 状态码和错误信息。
+
+```json
+{
+  "error": "string"
+}
+```
 
 ## `POST /slice_audio`
-
 **描述**: 执行音频切割任务。
 
 **请求体**:
+
 ```json
 {
-  "inp": "string",  // 输入文件路径
-  "opt_root": "string",  // 输出文件夹路径
-  "threshold": "string",  // 阈值
-  "min_length": "string",  // 最小长度
-  "min_interval": "string",  // 最小间隔
-  "hop_size": "string",  // 跳跃大小
-  "max_sil_kept": "string",  // 最大保留静音
-  "_max": 0.0,  // 最大值
-  "alpha": 0.0,  // 阿尔法值
-  "n_parts": 0  // 分片数量
+  "inp_dir": "string", // 输入文件夹路径
+  "opt_dir": "string",  // 输出文件夹路径
+  "threshold": -34,  // 阈值（db），音量小于这个值视作静音的备选切割点
+  "min_length": 4000,  // 最小长度（ms），每段最小多长，如果第一段太短一直和后面段连起来直到超过这个值
+  "min_interval": 300,  // 最小间隔（ms），最短切割间隔
+  "hop_size": 10,  // 跳跃大小，决定怎么算音量曲线，越小精度越大计算量越高（不是精度越大效果越好）
+  "max_sil_kept": 30,  // 最大保留静音（ms），切完后静音最多留多长
+  "_max": 0.9,  // 最大值（0.0-1.0），归一化后最大值多少
+  "alpha": 0.25,  // 阿尔法值（0.0-1.0），混多少比例归一化后音频进来
+  "n_process": 4  // 使用进程数（1-12）
 }
 ```
 
 **响应**:
-- 成功: 返回 `200` 状态码和输出路径。
-- 失败: 返回 `400` 状态码和错误信息。
+
++ 成功: 返回 `200` 状态码和输出文件夹路径。
+
+```json
+{
+  "opt_dir": "string"
+}
+```
+
++ 失败: 返回 `400` 状态码和错误信息。
+
+```json
+{
+  "error": "string"
+}
+```
 
 ## `POST /denoise_audio`
-
 **描述**: 执行语音降噪任务。
 
 **请求体**:
+
 ```json
 {
   "inp_dir": "string",  // 输入文件夹路径
@@ -1066,89 +649,169 @@ tmp = os.path.join(now_dir, "TEMP")  # 临时目录路径
 ```
 
 **响应**:
-- 成功: 返回 `200` 状态码和输出路径。
-- 失败: 返回 `400` 状态码和错误信息。
+
++ 成功: 返回 `200` 状态码和输出文件夹路径。
+
+```json
+{
+  "opt_dir": "string"
+}
+```
+
++ 失败: 返回 `400` 状态码和错误信息。
+
+```json
+{
+  "error": "string"
+}
+```
 
 ## `POST /asr`
-
 **描述**: 执行自动语音识别 (ASR) 任务。
 
 **请求体**:
+
 ```json
 {
   "inp_dir": "string",  // 输入文件夹路径
   "opt_dir": "string",  // 输出文件夹路径
-  "model": "string",  // 模型名称
+  "model": "string",  // 模型名称，可选：“达摩 ASR (中文)”，“Faster Whisper (多语种)”
   "model_size": "string",  // 模型大小
   "lang": "string",  // 语言
   "precision": "string"  // 精度
 }
+
+不同模型对应lang，precision和model_size的可选值：
+"达摩 ASR (中文)": {
+    'lang': ['zh','yue'],
+    'size': ['large'],
+    'precision': ['float32']
+},
+"Faster Whisper (多语种)": {
+    'lang': ['auto', 'zh', 'en', 'ja', 'ko', 'yue'],
+    'size': [
+        "tiny",     "tiny.en", 
+        "base",     "base.en", 
+        "small",    "small.en", 
+        "medium",   "medium.en", 
+        "large",    "large-v1", 
+        "large-v2", "large-v3"],
+    'precision': ['float32', 'float16', 'int8']
+},
 ```
 
 **响应**:
-- 成功: 返回 `200` 状态码和输出路径。
-- 失败: 返回 `400` 状态码和错误信息。
+
++ 成功: 返回 `200` 状态码和输出文件夹路径。
+
+```json
+{
+  "opt_dir": "string", // 输出文件夹路径
+  "opt_text_dir": "string" // asr识别文本文件输出路径
+}
+```
+
++ 失败: 返回 `400` 状态码和错误信息。
+
+```json
+{
+  "error": "string"
+}
+```
 
 ## `POST /one_click`
-
 **描述**: 执行一键三连任务。
 
 **请求体**:
+
 ```json
 {
-  "inp_text": "string",  // 输入文本路径
-  "inp_wav_dir": "string",  // 输入音频文件夹路径
-  "exp_name": "string",  // 实验名称
-  "gpu_numbers1a": "string",  // GPU编号1a
-  "gpu_numbers1Ba": "string",  // GPU编号1Ba
-  "gpu_numbers1c": "string",  // GPU编号1c
-  "bert_pretrained_dir": "string",  // BERT预训练模型路径
-  "ssl_pretrained_dir": "string",  // SSL预训练模型路径
-  "pretrained_s2G_path": "string"  // 预训练S2G模型路径
+  "inp_text": "string",  // 文本标注的路径，参考asr任务的输出
+  "inp_dir": "string",  // 输入音频文件夹路径，参考asr任务的输出
+  "opt_dir": "string", // 输出结果文件夹
+  "gpu_numbers1a": "string",  // 文本获取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0-0
+  "gpu_numbers1Ba": "string",  // SSL自监督特征提取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0-0
+  "gpu_numbers1c": "string",  // 语义token提取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0-0
+  "bert_pretrained_dir": "string",  // 预训练的中文BERT模型路径，默认为“GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large”
+  "ssl_pretrained_dir": "string",  // 预训练的SSL模型路径，默认为“GPT_SoVITS/pretrained_models/chinese-hubert-base”
+  "pretrained_s2G_path": "string"  // 预训练的SoVITS-G模型路径，默认为“GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth”
 }
 ```
 
 **响应**:
-- 成功: 返回 `200` 状态码和成功消息。
-- 失败: 返回 `400` 状态码和错误信息。
+
++ 成功: 返回 `200` 状态码和输出文件夹路径。
+
+```json
+{
+  "opt_dir": "string", // 输出文件夹路径
+}
+```
+
++ 失败: 返回 `400` 状态码和错误信息。
+
+```json
+{
+  "error": "string"
+}
+```
 
 ## `POST /train_sovits`
-
 **描述**: 执行 SoVITS 模型训练任务。
 
 **请求体**:
+
 ```json
 {
+  "data_dir": "string", // 训练数据文件夹路径。参考一键三连输出文件夹
+  "opt_dir": "string", // 模型输出文件夹
   "batch_size": 0,  // 批处理大小
   "total_epoch": 0,  // 总训练轮数
-  "exp_name": "string",  // 实验名称
-  "text_low_lr_rate": 0.0,  // 文本低学习率
+  "model_name": "string",  // 模型名称
+  "text_low_lr_rate": 0.0,  // 文本模块学习率权重
   "if_save_latest": true,  // 是否保存最新模型
   "if_save_every_weights": true,  // 是否保存每个权重
   "save_every_epoch": 0,  // 每多少轮保存一次
   "gpu_numbers": "string",  // GPU编号
-  "pretrained_s2G": "string",  // 预训练S2G模型路径
-  "pretrained_s2D": "string",  // 预训练S2D模型路径
-  "pretrained_s1": "string",  // 预训练S1模型路径
-  "if_dpo": false  // 是否使用DPO
+  "pretrained_s2G": "string",  // 预训练S2G模型路径，默认：“GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth”
+  "pretrained_s2D": "string",  // 预训练S2D模型路径，默认：“GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2D2333k.pth”
+  "pretrained_s1": "string",  // 预训练的GPT模型路径，默认：“GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt”
+  "notice_url": "string" // 消息发送URL
 }
 ```
 
 **响应**:
-- 成功: 返回 `200` 状态码和成功消息。
-- 失败: 返回 `400` 状态码和错误信息。
+
++ 成功: 返回 `200` 状态码、任务id和模型输出路径。
+
+```json
+{
+  "taskId": "string", // 训练任务ID
+  "opt_file": "string", // 模型输出路径
+}
+```
+
++ 失败: 返回 `400` 状态码和错误信息。
+
+```json
+{
+  "error": "string"
+}
+```
 
 ## `POST /train_gpt`
-
 **描述**: 执行 GPT 模型训练任务。
 
 **请求体**:
+
 ```json
 {
+  "data_dir": "string", // 训练数据文件夹路径。参考一键三连输出文件夹
+  "opt_dir": "string", // 模型输出文件夹
   "batch_size": 0,  // 批处理大小
   "total_epoch": 0,  // 总训练轮数
-  "exp_name": "string",  // 实验名称
-  "text_low_lr_rate": 0.0,  // 文本低学习率
+  "model_name": "string",  // 模型名称
+  "text_low_lr_rate": 0.0,  // 文本模块学习率权重
   "if_save_latest": true,  // 是否保存最新模型
   "if_save_every_weights": true,  // 是否保存每个权重
   "save_every_epoch": 0,  // 每多少轮保存一次
@@ -1156,11 +819,93 @@ tmp = os.path.join(now_dir, "TEMP")  # 临时目录路径
   "pretrained_s2G": "string",  // 预训练S2G模型路径
   "pretrained_s2D": "string",  // 预训练S2D模型路径
   "pretrained_s1": "string",  // 预训练S1模型路径
-  "if_dpo": false  // 是否使用DPO
+  "notice_url": "string" // 消息发送URL
 }
 ```
 
 **响应**:
-- 成功: 返回 `200` 状态码和成功消息。
-- 失败: 返回 `400` 状态码和错误信息。
+
++ 成功: 返回 `200` 状态码、任务id和模型输出路径。
+
+```json
+{
+  "taskId": "string", // 训练任务ID
+  "opt_file": "string", // 模型输出路径
+}
+```
+
++ 失败: 返回 `400` 状态码和错误信息。
+
+```json
+{
+  "error": "string"
+}
+```
+
+## `POST /delete_task`
+**描述**: 终止或删除特定任务。
+
+**请求体**:
+
+```json
+{
+  "taskId": "string" // 任务id
+}
+```
+
+**响应**:
+
++ 成功: 返回 `200` 状态码、任务id和模型输出路径。
+
+```json
+{
+  "taskId": "string", // 训练任务ID
+  "log": "string" // 执行结果
+}
+```
+
++ 失败: 返回 `400` 状态码和错误信息。
+
+```json
+{
+  "error": "string"
+}
+```
+
+## `GET /get_task_info`
+**描述**: 查询训练任务状态。
+
+**请求体**:
+
+```json
+{
+  "taskId": "string" // 任务ID
+}
+```
+
+**响应**:
+
++ 成功: 返回 `200` 状态码、任务id和模型输出路径。
+
+```json
+{
+  "taskId": "string", // 训练任务ID
+  "status": "string", // 任务状态。可选值：
+                      // 	“FAIL”：任务失败，
+                      // 	”PENDING“：等待开始
+                      // 	“SUCCESS”：任务成功
+                      // 	“RUNNING”：任务进行中
+  "log": "string"     // 执行log
+}
+```
+
++ 失败: 返回 `400` 状态码和错误信息。
+
+```json
+{
+  "error": "string"
+}
+```
+
+
 """

@@ -32,11 +32,14 @@ import torch
 from mdxnet import MDXNetDereverb
 from vr import AudioPre, AudioPreDeEcho
 from bsroformer import BsRoformer_Loader
+from tools.task_manager import TaskManager
+import uuid
 import ffmpeg
 
 # print(sys.path)
 i18n = I18nAuto()
 cut_method_names = get_cut_method_names()
+taskManager = TaskManager()
 
 parser = argparse.ArgumentParser(description="GPT-SoVITS api")
 parser.add_argument("-c", "--tts_config", type=str, default="GPT_SoVITS/configs/tts_infer.yaml", help="tts_infer路径")
@@ -453,6 +456,12 @@ class TrainRequest(BaseModel):
     notice_url: str  # 消息发送URL
 
 @APP.post("/train_sovits")
+async def start_train_sovits(request: TrainRequest):
+    try: 
+        return taskManager.add_task(str(uuid.uuid4()), train_sovits(request=request))
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": f"Start train sovits failed \n Exception: {str(e)}"})
+
 async def train_sovits(request: TrainRequest):
     try:
         with open("GPT_SoVITS/configs/s2.json") as f:
@@ -491,6 +500,12 @@ async def train_sovits(request: TrainRequest):
         return JSONResponse(status_code=400, content={"error": f"SoVITS training failed\n Exception: {str(e)}"})
 
 @APP.post("/train_gpt")
+async def start_train_gpt(request: TrainRequest):
+    try: 
+        return taskManager.add_task(str(uuid.uuid4()), train_gpt(request=request))
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": f"Start train gpt failed \n Exception: {str(e)}"})
+
 async def train_gpt(request: TrainRequest):
     try:
         config_file = "GPT_SoVITS/configs/s1longer.yaml" if version == "v1" else "GPT_SoVITS/configs/s1longer-v2.yaml"

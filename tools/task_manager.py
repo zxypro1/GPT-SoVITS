@@ -32,6 +32,7 @@ class TaskManager:
             self.tasks.put((task_id, task))
             self.task_status[task_id] = TaskStatus.PENDING
             print(f"Task {task_id} added to the queue.")
+            return task_id
 
     def delete_task(self, task_id: str):
         """
@@ -76,8 +77,12 @@ class TaskManager:
                     print(f"Starting task {task_id}")
                     try:
                         result = task()
-                        print(f"Task {task_id} completed successfully. Result: {result}")
-                        self.task_status[task_id] = TaskStatus.SUCCESS
+                        if result.code == 200:
+                            print(f"Task {task_id} completed successfully. Result: {result}")
+                            self.task_status[task_id] = TaskStatus.SUCCESS
+                        else:
+                            print(f"Task {task_id} failed. Result: {result}")
+                            self.task_status[task_id] = TaskStatus.FAIL
                     except Exception as e:
                         print(f"Task {task_id} failed with exception: {e}")
                         self.task_status[task_id] = TaskStatus.FAIL

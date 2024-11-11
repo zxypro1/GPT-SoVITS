@@ -458,7 +458,8 @@ class TrainRequest(BaseModel):
 @APP.post("/train_sovits")
 async def start_train_sovits(request: TrainRequest):
     try: 
-        return taskManager.add_task(str(uuid.uuid4()), train_sovits(request=request))
+        taskId = taskManager.add_task(str(uuid.uuid4()), train_sovits(request=request))
+        return JSONResponse(status_code=200, content={"taskId": taskId, "opt_file": f"{my_utils.clean_path(request.opt_dir)}/SoVITS_weights"})
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"Start train sovits failed \n Exception: {str(e)}"})
 
@@ -492,17 +493,18 @@ async def train_sovits(request: TrainRequest):
             f.write(json.dumps(data))
 
         cmd = f'"{python_exec}" GPT_SoVITS/s2_train.py --config "{tmp_config_path}"'
-        Popen(cmd, shell=True)
+        p = Popen(cmd, shell=True)
+        p.wait()
 
-        # TODO: taskId 
-        return JSONResponse(status_code=200, content={"message": "SoVITS training started", "taskId": "train_sovits", "opt_file": os.path.join(s2_dir, "SoVITS_weights")})
+        return {"code": 200, "message": "SoVITS training success", "opt_file": f"{s2_dir}/SoVITS_weights"}
     except Exception as e:
-        return JSONResponse(status_code=400, content={"error": f"SoVITS training failed\n Exception: {str(e)}"})
+        return {"code": 400, "message": f"SoVITS training failed \n Exception: {str(e)}"}
 
 @APP.post("/train_gpt")
 async def start_train_gpt(request: TrainRequest):
     try: 
-        return taskManager.add_task(str(uuid.uuid4()), train_gpt(request=request))
+        taskId = taskManager.add_task(str(uuid.uuid4()), train_gpt(request=request))
+        return JSONResponse(status_code=200, content={"taskId": taskId, "opt_file": f"{my_utils.clean_path(request.opt_dir)}/GPT_weights"})
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"Start train gpt failed \n Exception: {str(e)}"})
 
@@ -537,11 +539,12 @@ async def train_gpt(request: TrainRequest):
             f.write(yaml.dump(data, default_flow_style=False))
         
         cmd = f'"{python_exec}" GPT_SoVITS/s1_train.py --config_file "{tmp_config_path}"'
-        Popen(cmd, shell=True)
+        p = Popen(cmd, shell=True)
+        p.wait()
         
-        return JSONResponse(status_code=200, content={"message": "GPT training started", "taskId": "train_gpt", "opt_file": os.path.join(s1_dir, "GPT_weights")})
+        return {"code": 200, "message": "GPT training success", "opt_file": os.path.join(s1_dir, "GPT_weights")}
     except Exception as e:
-        return JSONResponse(status_code=400, content={"message": "GPT training failed", "Exception": str(e)})
+        return {"code": 400, "error": f"GPT training failed\n Exception: {str(e)}"}
 
 if __name__ == "__main__":
     try:

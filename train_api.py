@@ -59,6 +59,7 @@ if config_path in [None, ""]:
 
 tts_config = TTS_Config(config_path)
 print(tts_config)
+tts_config.device = 'cpu'
 tts_pipeline = TTS(tts_config)
 
 APP = FastAPI()
@@ -155,15 +156,12 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
                         inp_path, save_root_ins, save_root_vocal, format0,is_hp3
                     )
                 infos.append("%s->Success" % (os.path.basename(inp_path)))
-                yield "\n".join(infos)
             except:
                 infos.append(
                     "%s->%s" % (os.path.basename(inp_path), traceback.format_exc())
                 )
-                yield "\n".join(infos)
     except:
         infos.append(traceback.format_exc())
-        yield "\n".join(infos)
     finally:
         try:
             if model_name == "onnx_dereverb_By_FoxJoy":
@@ -177,7 +175,7 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
         print("clean_empty_cache")
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-    yield "\n".join(infos)
+    return "\n".join(infos)
 
 class UVRRequest(BaseModel):
     model_name: str  # UVR模型名称
@@ -189,7 +187,7 @@ class UVRRequest(BaseModel):
 
 @APP.post("/uvr")
 async def uvr_convert(request: UVRRequest):
-    request = request.dict()
+    # request = request.dict()
     try:
         model_name = request.model_name
         inp_root = request.inp_dir
@@ -198,15 +196,14 @@ async def uvr_convert(request: UVRRequest):
         save_root_ins = request.opt_dir_ins
         agg = request.agg
         format0 = request.format0
-        device = device
-        is_half = is_half
+        device = "cpu"
+        is_half = False
 
         if model_name not in uvr5_names:
             return JSONResponse(status_code=400, content={"error": f"model_name: {model_name} is not supported"})
 
-        response = []
-        async for info in uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format0, device, is_half):
-            response.append(info)
+        res = uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format0, device, is_half)
+        print(res)
         
         return JSONResponse(status_code=200, content={"opt_dir_ins": save_root_ins, "opt_dir_vocal": save_root_vocal})
     except Exception as e:
@@ -215,14 +212,14 @@ async def uvr_convert(request: UVRRequest):
 class SliceRequest(BaseModel):
     inp_dir: str # 输入文件夹路径
     opt_dir: str # 输出文件夹路径
-    threshold: int  # 阈值（db），音量小于这个值视作静音的备选切割点
-    min_length: int  # 最小长度（ms），每段最小多长，如果第一段太短一直和后面段连起来直到超过这个值
-    min_interval: int  # 最小间隔（ms），最短切割间隔
-    hop_size: int  # 跳跃大小，决定怎么算音量曲线，越小精度越大计算量越高（不是精度越大效果越好）
-    max_sil_kept: int  # 最大保留静音（ms），切完后静音最多留多长
-    _max: float  # 最大值（0.0-1.0），归一化后最大值多少
-    alpha: float  # 阿尔法值（0.0-1.0），混多少比例归一化后音频进来
-    n_process: int  # 使用进程数（1-12）
+    threshold: int = -34  # 阈值（db），音量小于这个值视作静音的备选切割点
+    min_length: int = 4000  # 最小长度（ms），每段最小多长，如果第一段太短一直和后面段连起来直到超过这个值
+    min_interval: int = 300 # 最小间隔（ms），最短切割间隔
+    hop_size: int = 10 # 跳跃大小，决定怎么算音量曲线，越小精度越大计算量越高（不是精度越大效果越好）
+    max_sil_kept: int = 500  # 最大保留静音（ms），切完后静音最多留多长
+    _max: float = 0.9 # 最大值（0.0-1.0），归一化后最大值多少
+    alpha: float = 0.25  # 阿尔法值（0.0-1.0），混多少比例归一化后音频进来
+    n_process: int = 4 # 使用进程数（1-12）
 
 @APP.post("/slice_audio")
 async def slice_audio(request: SliceRequest):
@@ -236,7 +233,7 @@ async def slice_audio(request: SliceRequest):
             
             ps_slice = []
             for i_part in range(request.n_process):
-                cmd = f'"{python_exec}" tools/slice_audio.py "{inp}" "{opt_root}" {request.threshold} {request.min_length} {request.min_interval} {request.hop_size} {request.max_sil_kept} {request._max} {request.alpha} {i_part} {request.n_parts}'
+                cmd = f'"{python_exec}" tools/slice_audio.py "{inp}" "{opt_root}" {request.threshold} {request.min_length} {request.min_interval} {request.hop_size} {request.max_sil_kept} {request._max} {request.alpha} {i_part} {request.n_process}'
                 p = Popen(cmd, shell=True)
                 ps_slice.append(p)
             
@@ -244,7 +241,7 @@ async def slice_audio(request: SliceRequest):
                 p.wait()
             
             # 假设处理后的文件名为 output.wav
-            output_file_path = os.path.join(opt_root, "output.wav")
+            output_file_path = os.path.join(opt_root)
             if not os.path.exists(output_file_path):
                 return JSONResponse(status_code=400, content={"error": "Output file does not exist"})
             

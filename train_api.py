@@ -12,7 +12,7 @@ import signal
 import numpy as np
 import soundfile as sf
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi import FastAPI, UploadFile, File
 import uvicorn
 from tools.i18n.i18n import I18nAuto
@@ -32,14 +32,17 @@ import torch
 from mdxnet import MDXNetDereverb
 from vr import AudioPre, AudioPreDeEcho
 from bsroformer import BsRoformer_Loader
-from tools.task_manager import TaskManager
+from tools.task_manager import TaskManager, TaskStatus
 import uuid
 import ffmpeg
+from contextlib import asynccontextmanager
+import asyncio
 
 # print(sys.path)
 i18n = I18nAuto()
 cut_method_names = get_cut_method_names()
 taskManager = TaskManager()
+data = {}
 
 parser = argparse.ArgumentParser(description="GPT-SoVITS api")
 parser.add_argument("-c", "--tts_config", type=str, default="GPT_SoVITS/configs/tts_infer.yaml", help="tts_infer路径")
@@ -62,7 +65,13 @@ print(tts_config)
 tts_config.device = 'cpu'
 tts_pipeline = TTS(tts_config)
 
-APP = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    data["taskManager"] = taskManager
+    yield
+    data.clear()
+
+APP = FastAPI(lifespan=lifespan)
 
 version="v2"
 weight_uvr5_root = "tools/uvr5/uvr5_weights"
@@ -234,6 +243,7 @@ async def slice_audio(request: SliceRequest):
             ps_slice = []
             for i_part in range(request.n_process):
                 cmd = f'"{python_exec}" tools/slice_audio.py "{inp}" "{opt_root}" {request.threshold} {request.min_length} {request.min_interval} {request.hop_size} {request.max_sil_kept} {request._max} {request.alpha} {i_part} {request.n_process}'
+                print(cmd)
                 p = Popen(cmd, shell=True)
                 ps_slice.append(p)
             
@@ -269,7 +279,7 @@ async def denoise_audio(request: DenoiseRequest):
             p.wait()
             
             # 假设处理后的文件名为 output.wav
-            output_file_path = os.path.join(opt_root, "output.wav")
+            output_file_path = os.path.join(opt_root)
             if not os.path.exists(output_file_path):
                 return JSONResponse(status_code=400, content={"error": "Output file does not exist"})
             
@@ -280,10 +290,10 @@ async def denoise_audio(request: DenoiseRequest):
 class ASRRequest(BaseModel):
     inp_dir: str  # 输入文件夹路径
     opt_dir: str  # 输出文件夹路径
-    model: str  # 模型名称
-    model_size: str  # 模型大小
-    lang: str  # 语言
-    precision: str  # 精度
+    model: str = '达摩 ASR (中文)'  # 模型名称
+    model_size: str = 'large'  # 模型大小
+    lang: str = 'zh' # 语言
+    precision: str = 'float32' # 精度
 
 @APP.post("/asr")
 async def asr(request: ASRRequest):
@@ -297,15 +307,16 @@ async def asr(request: ASRRequest):
             
             # 构建命令
             cmd = f'"{python_exec}" tools/asr/{asr_dict[request.model]["path"]} -i "{inp}" -o "{opt_root}" -s {request.model_size} -l {request.lang} -p {request.precision}'
+            print(cmd)
             p = Popen(cmd, shell=True)
             p.wait()
             
             # 假设处理后的文件名为 output.txt
-            output_file_path = os.path.join(opt_root, "output.txt")
+            output_file_path = os.path.join(opt_root)
             if not os.path.exists(output_file_path):
                 return JSONResponse(status_code=400, content={"message": "Output file does not exist"})
             
-            return JSONResponse(status_code=200, content={"opt_text_dir": f"{opt_root}", "opt_dir": f"{inp}"})
+            return JSONResponse(status_code=200, content={"opt_text_dir": f"{opt_root}/{os.path.basename(request.inp_dir)}.txt", "opt_dir": f"{inp}"})
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"ASR task failed \n Exception: {str(e)}"})
 
@@ -313,12 +324,34 @@ class OneClickRequest(BaseModel):
     inp_text: str  # 文本标注的路径，参考asr任务的输出
     inp_dir: str  # 输入音频文件夹路径，参考asr任务的输出
     opt_dir: str  # 输出结果文件夹
-    gpu_numbers1a: str  # 文本获取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0-0
-    gpu_numbers1Ba: str  # SSL自监督特征提取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0-0
-    gpu_numbers1c: str  # 语义token提取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0-0
-    bert_pretrained_dir: str  # 预训练的中文BERT模型路径
-    ssl_pretrained_dir: str  # 预训练的SSL模型路径
-    pretrained_s2G_path: str  # 预训练的SoVITS-G模型路径
+    gpu_numbers1a: str = '0' # 文本获取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0
+    gpu_numbers1Ba: str = '0' # SSL自监督特征提取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0
+    gpu_numbers1c: str = '0' # 语义token提取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0
+    bert_pretrained_dir: str = 'GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large' # 预训练的中文BERT模型路径
+    ssl_pretrained_dir: str = 'GPT_SoVITS/pretrained_models/chinese-hubert-base' # 预训练的SSL模型路径
+    pretrained_s2G_path: str = 'GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth' # 预训练的SoVITS-G模型路径
+
+
+# 添加缺失的变量
+set_gpu_numbers = {0}  # 示例值，根据实际情况调整
+default_gpu_numbers = "0"  # 示例值，根据实际情况调整
+tmp = os.path.join(now_dir, "TEMP")  # 临时目录路径
+
+def fix_gpu_number(input):  # 将越界的number强制改到界内
+    try:
+        if int(input) not in set_gpu_numbers:
+            return default_gpu_numbers
+    except:
+        return input
+    return input
+def fix_gpu_numbers(inputs):
+    output = []
+    try:
+        for input in inputs.split(","):
+            output.append(str(fix_gpu_number(input)))
+        return ",".join(output)
+    except:
+        return inputs
 
 @APP.post("/one_click")
 async def one_click(request: OneClickRequest):
@@ -438,34 +471,60 @@ async def one_click(request: OneClickRequest):
 
 class TrainRequest(BaseModel):
     data_dir: str  # 训练数据文件夹路径
-    opt_dir: str  # 模型输出文件夹
-    batch_size: int  # 批处理大小
-    total_epoch: int  # 总训练轮数
-    model_name: str  # 模型名称
-    text_low_lr_rate: float  # 文本模块学习率权重
-    if_save_latest: bool  # 是否保存最新模型
-    if_save_every_weights: bool  # 是否保存每个权重
-    save_every_epoch: int  # 每多少轮保存一次
-    gpu_numbers: str  # GPU编号
-    pretrained_s2G: str  # 预训练S2G模型路径
-    pretrained_s2D: str  # 预训练S2D模型路径
-    pretrained_s1: str  # 预训练S1模型路径
-    notice_url: str  # 消息发送URL
+    opt_dir: str # 模型输出路径
+    batch_size: int = 8 # 批处理大小
+    total_epoch: int = 8  # 总训练轮数
+    model_name: str  # 输出模型名称
+    text_low_lr_rate: float = 0.4 # 文本模块学习率权重
+    if_save_latest: bool = True # 是否保存最新模型
+    if_save_every_weights: bool = True # 是否保存每个权重
+    save_every_epoch: int = 4 # 每多少轮保存一次
+    gpu_numbers: str = '0' # GPU编号，默认为0
+    pretrained_s2G: str = "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth"  # 预训练S2G模型路径
+    pretrained_s2D: str = "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2D2333k.pth" # 预训练S2D模型路径
+    pretrained_s1: str = "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt" # 预训练S1模型路径
+    notice_url: str = ''  # 消息发送URL
 
+async def event_generator(method, request):
+    taskId = data["taskManager"].add_task(str(uuid.uuid4()), method, request)
+    yield f"taskId: {taskId}\n"
+    yield f"{data['taskManager'].get_task_status(taskId).value}\n"
+    try:
+        # method(request)
+        while data['taskManager'].get_task_status(taskId) == TaskStatus.RUNNING or data['taskManager'].get_task_status(taskId) == TaskStatus.PENDING:
+            yield f"{data['taskManager'].get_task_status(taskId).value}\n"
+            await asyncio.sleep(10)  # 等待10秒
+        yield f"{data['taskManager'].get_task_status(taskId).value}\n"
+        yield f"{str(data['taskManager'].get_task_output(taskId))}\n"
+    except Exception as e:
+        print(str(e))
+    except ConnectionAbortedError as e:
+        print(e)
+        yield JSONResponse(status_code=400, content={"error": f"Start train sovits failed \n ConnectionAbortedError: {str(e)}"})
+    
 @APP.post("/train_sovits")
 async def start_train_sovits(request: TrainRequest):
     try: 
-        taskId = taskManager.add_task(str(uuid.uuid4()), train_sovits(request=request))
-        return JSONResponse(status_code=200, content={"taskId": taskId, "opt_file": f"{my_utils.clean_path(request.opt_dir)}/SoVITS_weights"})
+        # res = train_sovits(request=request)
+        # return JSONResponse(status_code=200, content={"res": res})
+        return StreamingResponse(event_generator(train_sovits, request), media_type="text/plain")
+        # taskId = data["taskManager"].add_task(str(uuid.uuid4()), train_sovits, request)
+        # return JSONResponse(status_code=200, content={"taskId": taskId, "opt_file": f"{my_utils.clean_path(request.data_dir)}/SoVITS_weights"})
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"Start train sovits failed \n Exception: {str(e)}"})
+    except ConnectionAbortedError as e:
+        print(e)
+        return JSONResponse(status_code=400, content={"error": f"Start train sovits failed \n ConnectionAbortedError: {str(e)}"})
 
-async def train_sovits(request: TrainRequest):
+def train_sovits(request: TrainRequest):
     try:
         with open("GPT_SoVITS/configs/s2.json") as f:
             data = json.loads(f.read())
-        s2_dir = my_utils.clean_path(request.opt_dir)
+        s2_dir = my_utils.clean_path(request.data_dir)
+        # exp_dir = my_utils.clean_path(request.data_dir)
         os.makedirs(f"{s2_dir}/logs_s2", exist_ok=True)
+        if not os.path.exists(request.opt_dir):
+            os.makedirs(request.opt_dir, exist_ok=True)
         if check_for_existance([s2_dir], is_train=True):
             check_details([s2_dir], is_train=True)
         if not is_half:
@@ -482,7 +541,7 @@ async def train_sovits(request: TrainRequest):
         data["train"]["gpu_numbers"] = request.gpu_numbers
         data["model"]["version"] = version
         data["data"]["exp_dir"] = s2_dir
-        data["save_weight_dir"] = os.path.join(s2_dir, "SoVITS_weights")
+        data["save_weight_dir"] = my_utils.clean_path(request.opt_dir)
         data["name"] = request.model_name
         data["version"] = version
         tmp_config_path = f"{tmp}/tmp_s2.json"
@@ -493,24 +552,28 @@ async def train_sovits(request: TrainRequest):
         p = Popen(cmd, shell=True)
         p.wait()
 
-        return {"code": 200, "message": "SoVITS training success", "opt_file": f"{s2_dir}/SoVITS_weights"}
+        return {"code": 200, "message": "SoVITS training success", "opt_file": my_utils.clean_path(request.opt_dir)}
     except Exception as e:
         return {"code": 400, "message": f"SoVITS training failed \n Exception: {str(e)}"}
 
 @APP.post("/train_gpt")
 async def start_train_gpt(request: TrainRequest):
     try: 
-        taskId = taskManager.add_task(str(uuid.uuid4()), train_gpt(request=request))
-        return JSONResponse(status_code=200, content={"taskId": taskId, "opt_file": f"{my_utils.clean_path(request.opt_dir)}/GPT_weights"})
+        return StreamingResponse(event_generator(train_gpt, request), media_type="text/plain")
+        # taskId = data["taskManager"].add_task(str(uuid.uuid4()), train_gpt, request)
+        # return JSONResponse(status_code=200, content={"taskId": taskId, "opt_file": my_utils.clean_path(request.opt_dir)})
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"Start train gpt failed \n Exception: {str(e)}"})
 
-async def train_gpt(request: TrainRequest):
+def train_gpt(request: TrainRequest):
     try:
         config_file = "GPT_SoVITS/configs/s1longer.yaml" if version == "v1" else "GPT_SoVITS/configs/s1longer-v2.yaml"
         with open(config_file) as f:
             data = yaml.load(f.read(), Loader=yaml.FullLoader)
-        s1_dir = my_utils.clean_path(request.opt_dir)
+        s1_dir = my_utils.clean_path(request.data_dir)
+        if not os.path.exists(request.opt_dir):
+            os.makedirs(request.opt_dir, exist_ok=True)
+        # exp_dir = my_utils.clean_path(request.data_dir)
         os.makedirs(f"{s1_dir}/logs_s1", exist_ok=True)
         if check_for_existance([s1_dir], is_train=True):
             check_details([s1_dir], is_train=True)
@@ -524,8 +587,8 @@ async def train_gpt(request: TrainRequest):
         data["train"]["if_save_every_weights"] = request.if_save_every_weights
         data["train"]["if_save_latest"] = request.if_save_latest
         data["train"]["if_dpo"] = False
-        data["train"]["half_weights_save_dir"] = GPT_weight_root[-int(version[-1]) + 2]
-        data["train"]["exp_name"] = s1_dir
+        data["train"]["half_weights_save_dir"] = request.opt_dir
+        data["train"]["exp_name"] = request.model_name
         data["train_semantic_path"] = f"{s1_dir}/6-name2semantic.tsv"
         data["train_phoneme_path"] = f"{s1_dir}/2-name2text.txt"
         data["output_dir"] = f"{s1_dir}/logs_s1"
@@ -539,9 +602,28 @@ async def train_gpt(request: TrainRequest):
         p = Popen(cmd, shell=True)
         p.wait()
         
-        return {"code": 200, "message": "GPT training success", "opt_file": os.path.join(s1_dir, "GPT_weights")}
+        return {"code": 200, "message": "GPT training success", "opt_file": my_utils.clean_path(request.opt_dir)}
     except Exception as e:
         return {"code": 400, "error": f"GPT training failed\n Exception: {str(e)}"}
+
+class TaskRequest(BaseModel):
+    task_id: str
+
+@APP.post("/delete_task")
+async def delete_task(request: TaskRequest):
+    try: 
+        data["taskManager"].delete_task(request.task_id)
+        return JSONResponse(status_code=200, content={"taskId": str(request.task_id), "log": "Delete task success"})
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": f"Delete task failed \n Exception: {str(e)}"})
+
+@APP.post("/get_task_info")
+async def get_task_info(request: TaskRequest):
+    try:
+        task_status = data["taskManager"].get_task_status(request.task_id)
+        return JSONResponse(status_code=200, content={"taskId": str(request.task_id), "status": str(task_status), "log": "Get task info success"})
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": f"Get task info failed \n Exception: {str(e)}"})
 
 if __name__ == "__main__":
     try:
@@ -552,28 +634,6 @@ if __name__ == "__main__":
         traceback.print_exc()
         os.kill(os.getpid(), signal.SIGTERM)
         exit(0)
-
-def fix_gpu_number(input):  # 将越界的number强制改到界内
-    try:
-        if int(input) not in set_gpu_numbers:
-            return default_gpu_numbers
-    except:
-        return input
-    return input
-
-def fix_gpu_numbers(inputs):
-    output = []
-    try:
-        for input in inputs.split(","):
-            output.append(str(fix_gpu_number(input)))
-        return ",".join(output)
-    except:
-        return inputs
-
-# 添加缺失的变量
-set_gpu_numbers = {0}  # 示例值，根据实际情况调整
-default_gpu_numbers = "0"  # 示例值，根据实际情况调整
-tmp = os.path.join(now_dir, "TEMP")  # 临时目录路径
 
 """
 # API 文档

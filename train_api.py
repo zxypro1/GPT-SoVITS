@@ -322,7 +322,7 @@ async def asr(request: ASRRequest):
         return JSONResponse(status_code=400, content={"error": f"ASR task failed \n Exception: {str(e)}"})
 
 class OneClickRequest(BaseModel):
-    inp_text: str  # 文本标注的路径，参考asr任务的输出
+    inp_text: str  # 文本标注文件（.list）的路径，参考asr任务的输出。
     inp_dir: str  # 输入音频文件夹路径，参考asr任务的输出
     opt_dir: str  # 输出结果文件夹
     gpu_numbers1a: str = '0' # 文本获取任务的GPU编号，GPU卡号以-分割，每个卡号一个进程，默认0

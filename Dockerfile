@@ -37,6 +37,6 @@ RUN if [ "$IMAGE_TYPE" != "elite" ]; then \
 # Copy the rest of the application
 COPY . /workspace
 
-EXPOSE 9871 9872 9873 9874 9880
+EXPOSE 9871 9872 9873 9874 9880 9881
 
 CMD ["python", "webui.py"]

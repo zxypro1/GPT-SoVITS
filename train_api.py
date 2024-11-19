@@ -37,6 +37,7 @@ import uuid
 import ffmpeg
 from contextlib import asynccontextmanager
 import asyncio
+import requests
 
 # print(sys.path)
 i18n = I18nAuto()
@@ -47,7 +48,7 @@ data = {}
 parser = argparse.ArgumentParser(description="GPT-SoVITS api")
 parser.add_argument("-c", "--tts_config", type=str, default="GPT_SoVITS/configs/tts_infer.yaml", help="tts_infer路径")
 parser.add_argument("-a", "--bind_addr", type=str, default="0.0.0.0", help="default: 0.0.0.0")
-parser.add_argument("-p", "--port", type=int, default="9880", help="default: 9880")
+parser.add_argument("-p", "--port", type=int, default="9881", help="default: 9881")
 args = parser.parse_args()
 config_path = args.tts_config
 # device = args.device
@@ -62,7 +63,7 @@ if config_path in [None, ""]:
 
 tts_config = TTS_Config(config_path)
 print(tts_config)
-tts_config.device = 'cpu'
+tts_config.device = device
 tts_pipeline = TTS(tts_config)
 
 @asynccontextmanager
@@ -152,7 +153,7 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
                 traceback.print_exc()
             if need_reformat == 1:
                 tmp_path = "%s/%s.reformatted.wav" % (
-                    os.path.join(os.environ["TEMP"]),
+                    os.path.join(now_dir, "TEMP"),
                     os.path.basename(inp_path),
                 )
                 os.system(
@@ -205,7 +206,7 @@ async def uvr_convert(request: UVRRequest):
         save_root_ins = request.opt_dir_ins
         agg = request.agg
         format0 = request.format0
-        device = "cpu"
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         is_half = False
 
         if model_name not in uvr5_names:
@@ -483,7 +484,7 @@ class TrainRequest(BaseModel):
     pretrained_s2G: str = "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth"  # 预训练S2G模型路径
     pretrained_s2D: str = "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2D2333k.pth" # 预训练S2D模型路径
     pretrained_s1: str = "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt" # 预训练S1模型路径
-    notice_url: str = ''  # 消息发送URL
+    notice_url: str = None  # 消息发送URL
 
 async def event_generator(method, request):
     taskId = data["taskManager"].add_task(str(uuid.uuid4()), method, request)
@@ -501,7 +502,24 @@ async def event_generator(method, request):
     except ConnectionAbortedError as e:
         print(e)
         yield JSONResponse(status_code=400, content={"error": f"Start train sovits failed \n ConnectionAbortedError: {str(e)}"})
-    
+
+def send_notice(msg: dict, request: TrainRequest):
+    url = request.notice_url
+    if url:
+        print("发现消息通知url，发送中...")
+        try: 
+            header = {'Content-Type': 'application/json'}
+            res = requests.post(url, data=json.dumps(msg), headers=header)
+            if res.status_code != 200:
+                print("消息发送失败")
+                return
+            print("消息发送成功")
+            print(res.text)
+        except Exception as e:
+            print("消息发送失败")
+            print(e)
+
+        
 @APP.post("/train_sovits")
 async def start_train_sovits(request: TrainRequest):
     try: 
@@ -551,9 +569,12 @@ def train_sovits(request: TrainRequest):
         cmd = f'"{python_exec}" GPT_SoVITS/s2_train.py --config "{tmp_config_path}"'
         p = Popen(cmd, shell=True)
         p.wait()
+        # 向notice_url发送消息
+        send_notice(msg={"code": 200, "message": "SoVITS training success", "opt_dir": my_utils.clean_path(request.opt_dir)}, request=request)
 
-        return {"code": 200, "message": "SoVITS training success", "opt_file": my_utils.clean_path(request.opt_dir)}
+        return {"code": 200, "message": "SoVITS training success", "opt_dir": my_utils.clean_path(request.opt_dir)}
     except Exception as e:
+        send_notice(msg={"code": 400, "message": f"SoVITS training failed \n Exception: {str(e)}"}, request=request)
         return {"code": 400, "message": f"SoVITS training failed \n Exception: {str(e)}"}
 
 @APP.post("/train_gpt")
@@ -602,8 +623,10 @@ def train_gpt(request: TrainRequest):
         p = Popen(cmd, shell=True)
         p.wait()
         
-        return {"code": 200, "message": "GPT training success", "opt_file": my_utils.clean_path(request.opt_dir)}
+        send_notice(msg={"code": 200, "message": "GPT training success", "opt_dir": my_utils.clean_path(request.opt_dir)}, request=request)
+        return {"code": 200, "message": "GPT training success", "opt_dir": my_utils.clean_path(request.opt_dir)}
     except Exception as e:
+        send_notice(msg={"code": 400, "message": f"GPT training failed \n Exception: {str(e)}"}, request=request)
         return {"code": 400, "error": f"GPT training failed\n Exception: {str(e)}"}
 
 class TaskRequest(BaseModel):
@@ -620,7 +643,7 @@ async def delete_task(request: TaskRequest):
 @APP.post("/get_task_info")
 async def get_task_info(request: TaskRequest):
     try:
-        task_status = data["taskManager"].get_task_status(request.task_id)
+        task_status = data["taskManager"].get_task_status(request.task_id).value
         return JSONResponse(status_code=200, content={"taskId": str(request.task_id), "status": str(task_status), "log": "Get task info success"})
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"Get task info failed \n Exception: {str(e)}"})

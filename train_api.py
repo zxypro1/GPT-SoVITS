@@ -30,8 +30,8 @@ import yaml
 from tools.asr.config import asr_dict
 import torch
 from tools.uvr5.mdxnet import MDXNetDereverb
-from vr import AudioPre, AudioPreDeEcho
-from bsroformer import BsRoformer_Loader
+from tools.uvr5.vr import AudioPre, AudioPreDeEcho
+from tools.uvr5.bsroformer import BsRoformer_Loader
 from tools.task_manager import TaskManager, TaskStatus
 import uuid
 import ffmpeg

@@ -23,7 +23,6 @@ PyYAML
 psutil
 jieba_fast
 jieba
-mdxnet
 LangSegment>=0.2.0
 Faster_Whisper
 wordsegment

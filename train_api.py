@@ -29,7 +29,7 @@ import json
 import yaml
 from tools.asr.config import asr_dict
 import torch
-from mdxnet import MDXNetDereverb
+from tools.uvr5.mdxnet import MDXNetDereverb
 from vr import AudioPre, AudioPreDeEcho
 from bsroformer import BsRoformer_Loader
 from tools.task_manager import TaskManager, TaskStatus

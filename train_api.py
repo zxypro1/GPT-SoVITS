@@ -6,6 +6,7 @@ from typing import Generator
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 sys.path.append("%s/GPT_SoVITS" % (now_dir))
+sys.path.append("%s/tools" % (now_dir))
 
 import argparse
 import signal

@@ -1,9 +1,7 @@
 import os,sys
 if len(sys.argv)==1:sys.argv.append('v2')
 version="v1"if sys.argv[1]=="v1" else"v2"
-os.environ["version"]=version
-now_dir = os.getcwd()
-sys.path.insert(0, now_dir)
+≈
 import warnings
 warnings.filterwarnings("ignore")
 import json,yaml,torch,pdb,re,shutil

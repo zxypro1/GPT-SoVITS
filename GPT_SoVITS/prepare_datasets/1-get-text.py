@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 
-import os
+import os, sys
 
+home = os.environ.get("home")
+sys.path.append(home)
+sys.path.append("%s/GPT_SoVITS" % (home))
+sys.path.append("%s/tools" % (home))
 inp_text = os.environ.get("inp_text")
 inp_wav_dir = os.environ.get("inp_wav_dir")
 exp_name = os.environ.get("exp_name")
@@ -18,7 +22,7 @@ import sys, numpy as np, traceback, pdb
 import os.path
 from glob import glob
 from tqdm import tqdm
-from text.cleaner import clean_text
+from GPT_SoVITS.text.cleaner import clean_text
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 import numpy as np
 from tools.my_utils import clean_path

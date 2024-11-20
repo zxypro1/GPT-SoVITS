@@ -1,9 +1,30 @@
 import os,argparse
 import traceback
+try:
+    from modelscope.pipelines import pipeline
+    from modelscope.utils.constant import Tasks
+    from tqdm import tqdm
+except:
+    # 清理cache
+    # 获取用户主目录
+    home_dir = os.path.expanduser('~')
 
-from modelscope.pipelines import pipeline
-from modelscope.utils.constant import Tasks
-from tqdm import tqdm
+    # 构建文件路径
+    file_path = os.path.join(home_dir, '.cache', 'modelscope', 'ast_indexer')
+
+    # 删除文件
+    try:
+        os.remove(file_path)
+        print(f"文件 {file_path} 已成功删除")
+    except FileNotFoundError:
+        print(f"文件 {file_path} 不存在")
+    except PermissionError:
+        print(f"没有权限删除文件 {file_path}")
+    except Exception as e:
+        print(f"删除文件 {file_path} 时发生错误: {e}")
+    from modelscope.pipelines import pipeline
+    from modelscope.utils.constant import Tasks
+    from tqdm import tqdm
 
 path_denoise  = 'tools/denoise-model/speech_frcrn_ans_cirm_16k'
 path_denoise  = path_denoise  if os.path.exists(path_denoise)  else "damo/speech_frcrn_ans_cirm_16k"

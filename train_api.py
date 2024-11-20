@@ -7,6 +7,9 @@ now_dir = os.getcwd()
 sys.path.append(now_dir)
 sys.path.append("%s/GPT_SoVITS" % (now_dir))
 sys.path.append("%s/tools" % (now_dir))
+os.environ["version"]="v2"
+os.environ["home"] = now_dir
+sys.path.insert(0, now_dir)
 
 import argparse
 import signal
@@ -560,6 +563,7 @@ def train_sovits(request: TrainRequest):
         data["save_weight_dir"] = my_utils.clean_path(request.opt_dir)
         data["name"] = request.model_name
         data["version"] = version
+        os.makedirs(tmp, exist_ok=True)
         tmp_config_path = f"{tmp}/tmp_s2.json"
         with open(tmp_config_path, "w") as f:
             f.write(json.dumps(data))
@@ -613,6 +617,7 @@ def train_gpt(request: TrainRequest):
         data["output_dir"] = f"{s1_dir}/logs_s1"
         os.environ["_CUDA_VISIBLE_DEVICES"] = fix_gpu_numbers(request.gpu_numbers.replace("-", ","))
         os.environ["hz"] = "25hz"
+        os.makedirs(tmp, exist_ok=True)
         tmp_config_path = f"{tmp}/tmp_s1.yaml"
         with open(tmp_config_path, "w") as f:
             f.write(yaml.dump(data, default_flow_style=False))

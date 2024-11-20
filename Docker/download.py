@@ -43,8 +43,4 @@ shutil.move(os.path.join(current_dir, 'G2PWModel'), target_dir)
 # 清理临时文件
 os.remove(download_path)
 
-# 清理cache
-ast_path = '~/.cache/modelscope/ast_indexer'
-os.remove(ast_path)
-
 print("下载、解压、重命名和移动操作完成。")

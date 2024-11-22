@@ -97,9 +97,35 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--precision", type=str, default='float16', choices=['float16','float32'],
                         help="fp16 or fp32")#还没接入
     cmd = parser.parse_args()
-    execute_asr(
-        input_folder  = cmd.input_folder,
-        output_folder = cmd.output_folder,
-        model_size    = cmd.model_size,
-        language      = cmd.language,
-    )
+    try:
+        execute_asr(
+            input_folder  = cmd.input_folder,
+            output_folder = cmd.output_folder,
+            model_size    = cmd.model_size,
+            language      = cmd.language,
+        )
+    except Exception as e:
+        print("asr执行失败，尝试删除indexer后重试。")
+        # 清理cache
+        # 获取用户主目录
+        home_dir = os.path.expanduser('~')
+
+        # 构建文件路径
+        file_path = os.path.join(home_dir, '.cache', 'modelscope', 'ast_indexer')
+
+        # 删除文件
+        try:
+            os.remove(file_path)
+            print(f"文件 {file_path} 已成功删除")
+        except FileNotFoundError:
+            print(f"文件 {file_path} 不存在")
+        except PermissionError:
+            print(f"没有权限删除文件 {file_path}")
+        except Exception as e:
+            print(f"删除文件 {file_path} 时发生错误: {e}")
+        execute_asr(
+            input_folder  = cmd.input_folder,
+            output_folder = cmd.output_folder,
+            model_size    = cmd.model_size,
+            language      = cmd.language,
+        )

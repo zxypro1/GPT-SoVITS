@@ -27,7 +27,7 @@ from tools.my_utils import load_audio, check_for_existance, check_details, clean
 from config import python_exec, exp_root, is_half
 import tempfile
 import shutil
-from subprocess import Popen
+from subprocess import Popen, PIPE, STDOUT, CalledProcessError
 from tools import my_utils
 import json
 import yaml
@@ -280,8 +280,18 @@ async def denoise_audio(request: DenoiseRequest):
             
             # 构建命令
             cmd = f'"{python_exec}" tools/cmd-denoise.py -i "{inp}" -o "{opt_root}" -p {"float16" if is_half else "float32"}'
-            p = Popen(cmd, shell=True)
-            p.wait()
+            p = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
+            track = []
+            while True:
+                next_line = p.stdout.readline()
+                return_line = next_line.decode("utf-8", "ignore")
+                if return_line == '' and p.poll() != None:
+                    break
+                track.append(return_line)
+                print(return_line)
+            return_code = p.wait()
+            if return_code:
+                raise CalledProcessError(return_code, track)
             
             # 假设处理后的文件名为 output.wav
             output_file_path = os.path.join(opt_root)
@@ -313,8 +323,18 @@ async def asr(request: ASRRequest):
             # 构建命令
             cmd = f'"{python_exec}" tools/asr/{asr_dict[request.model]["path"]} -i "{inp}" -o "{opt_root}" -s {request.model_size} -l {request.lang} -p {request.precision}'
             print(cmd)
-            p = Popen(cmd, shell=True)
-            p.wait()
+            p = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
+            track = []
+            while True:
+                next_line = p.stdout.readline()
+                return_line = next_line.decode("utf-8", "ignore")
+                if return_line == '' and p.poll() != None:
+                    break
+                track.append(return_line)
+                print(return_line)
+            return_code = p.wait()
+            if return_code:
+                raise CalledProcessError(return_code, track)
             
             # 假设处理后的文件名为 output.txt
             output_file_path = os.path.join(opt_root)
@@ -489,6 +509,7 @@ class TrainRequest(BaseModel):
     pretrained_s2D: str = "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2D2333k.pth" # 预训练S2D模型路径
     pretrained_s1: str = "GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt" # 预训练S1模型路径
     notice_url: str = None  # 消息发送URL
+    if_dpo: bool = False # dpo训练
 
 async def event_generator(method, request):
     taskId = data["taskManager"].add_task(str(uuid.uuid4()), method, request)
@@ -572,8 +593,18 @@ def train_sovits(request: TrainRequest):
             f.write(json.dumps(data))
 
         cmd = f'"{python_exec}" GPT_SoVITS/s2_train.py --config "{tmp_config_path}"'
-        p = Popen(cmd, shell=True)
-        p.wait()
+        p = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
+        track = []
+        while True:
+            next_line = p.stdout.readline()
+            return_line = next_line.decode("utf-8", "ignore")
+            if return_line == '' and p.poll() != None:
+                break
+            track.append(return_line)
+            print(return_line)
+        return_code = p.wait()
+        if return_code:
+            raise CalledProcessError(return_code, track)
         # 向notice_url发送消息
         send_notice(msg={"code": 200, "message": "SoVITS training success", "opt_dir": my_utils.clean_path(request.opt_dir)}, request=request)
 
@@ -612,7 +643,7 @@ def train_gpt(request: TrainRequest):
         data["train"]["save_every_n_epoch"] = request.save_every_epoch
         data["train"]["if_save_every_weights"] = request.if_save_every_weights
         data["train"]["if_save_latest"] = request.if_save_latest
-        data["train"]["if_dpo"] = False
+        data["train"]["if_dpo"] = request.if_dpo
         data["train"]["half_weights_save_dir"] = request.opt_dir
         data["train"]["exp_name"] = request.model_name
         data["train_semantic_path"] = f"{s1_dir}/6-name2semantic.tsv"
@@ -626,8 +657,18 @@ def train_gpt(request: TrainRequest):
             f.write(yaml.dump(data, default_flow_style=False))
         
         cmd = f'"{python_exec}" GPT_SoVITS/s1_train.py --config_file "{tmp_config_path}"'
-        p = Popen(cmd, shell=True)
-        p.wait()
+        p = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
+        track = []
+        while True:
+            next_line = p.stdout.readline()
+            return_line = next_line.decode("utf-8", "ignore")
+            if return_line == '' and p.poll() != None:
+                break
+            track.append(return_line)
+            print(return_line)
+        return_code = p.wait()
+        if return_code:
+            raise CalledProcessError(return_code, track)
         
         send_notice(msg={"code": 200, "message": "GPT training success", "opt_dir": my_utils.clean_path(request.opt_dir)}, request=request)
         return {"code": 200, "message": "GPT training success", "opt_dir": my_utils.clean_path(request.opt_dir)}

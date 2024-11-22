@@ -79,11 +79,13 @@ async def lifespan(app: FastAPI):
 APP = FastAPI(lifespan=lifespan)
 
 version="v2"
-weight_uvr5_root = "tools/uvr5/uvr5_weights"
+weight_uvr5_root = ["tools/uvr5/uvr5_weights", f"{os.environ.get('download_path')}/uvr5_weights"]
 uvr5_names = []
-for name in os.listdir(weight_uvr5_root):
-    if name.endswith(".pth") or name.endswith(".ckpt") or "onnx" in name:
-        uvr5_names.append(name.replace(".pth", "").replace(".ckpt", ""))
+for path in weight_uvr5_root:
+    for name in os.listdir(path):
+        if name.endswith(".pth") or name.endswith(".ckpt") or "onnx" in name:
+            uvr5_names.append(name.replace(".pth", "").replace(".ckpt", ""))
+print(uvr5_names)
 pretrained_sovits_name=["GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth", "GPT_SoVITS/pretrained_models/s2G488k.pth"]
 pretrained_gpt_name=["GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt", "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt"]
 
@@ -119,7 +121,7 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
     elif model_name == "Bs_Roformer" or "bs_roformer" in model_name.lower():
         func = BsRoformer_Loader
         pre_fun = func(
-            model_path = os.path.join(weight_uvr5_root, model_name + ".ckpt"),
+            model_path = os.path.join(weight_uvr5_root[0], model_name + ".ckpt") if os.path.exists(weight_uvr5_root[0], model_name + ".ckpt") else os.path.join(weight_uvr5_root[1], model_name + ".ckpt"),
             device = device,
             is_half=is_half
         )
@@ -127,7 +129,7 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
         func = AudioPre if "DeEcho" not in model_name else AudioPreDeEcho
         pre_fun = func(
             agg=int(agg),
-            model_path=os.path.join(weight_uvr5_root, model_name + ".pth"),
+            model_path=os.path.join(weight_uvr5_root[0], model_name + ".pth") if os.path.exists(weight_uvr5_root[0], model_name + ".pth") else os.path.join(weight_uvr5_root[1], model_name + ".pth"),
             device=device,
             is_half=is_half,
         )

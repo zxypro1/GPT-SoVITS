@@ -82,9 +82,10 @@ version="v2"
 weight_uvr5_root = ["tools/uvr5/uvr5_weights", f"{os.environ.get('download_path')}/uvr5_weights"]
 uvr5_names = []
 for path in weight_uvr5_root:
-    for name in os.listdir(path):
-        if name.endswith(".pth") or name.endswith(".ckpt") or "onnx" in name:
-            uvr5_names.append(name.replace(".pth", "").replace(".ckpt", ""))
+    if os.path.exists(path): 
+        for name in os.listdir(path):
+            if name.endswith(".pth") or name.endswith(".ckpt") or "onnx" in name:
+                uvr5_names.append(name.replace(".pth", "").replace(".ckpt", ""))
 print(uvr5_names)
 pretrained_sovits_name=["GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth", "GPT_SoVITS/pretrained_models/s2G488k.pth"]
 pretrained_gpt_name=["GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt", "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt"]

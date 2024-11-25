@@ -121,16 +121,20 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
         pre_fun = MDXNetDereverb(15)
     elif model_name == "Bs_Roformer" or "bs_roformer" in model_name.lower():
         func = BsRoformer_Loader
+        local_path = os.path.join(weight_uvr5_root[0], model_name + ".ckpt")
+        nas_path = os.path.join(weight_uvr5_root[1], model_name + ".ckpt")
         pre_fun = func(
-            model_path = os.path.join(weight_uvr5_root[0], model_name + ".ckpt") if os.path.exists(weight_uvr5_root[0], model_name + ".ckpt") else os.path.join(weight_uvr5_root[1], model_name + ".ckpt"),
+            model_path = local_path if os.path.exists(local_path) else nas_path,
             device = device,
             is_half=is_half
         )
     else:
         func = AudioPre if "DeEcho" not in model_name else AudioPreDeEcho
+        local_path = os.path.join(weight_uvr5_root[0], model_name + ".pth")
+        nas_path = os.path.join(weight_uvr5_root[1], model_name + ".pth")
         pre_fun = func(
             agg=int(agg),
-            model_path=os.path.join(weight_uvr5_root[0], model_name + ".pth") if os.path.exists(weight_uvr5_root[0], model_name + ".pth") else os.path.join(weight_uvr5_root[1], model_name + ".pth"),
+            model_path=local_path if os.path.exists(local_path) else nas_path,
             device=device,
             is_half=is_half,
         )

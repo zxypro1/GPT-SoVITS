@@ -345,7 +345,7 @@ async def asr(request: ASRRequest):
             if not os.path.exists(output_file_path):
                 return JSONResponse(status_code=400, content={"message": "Output file does not exist"})
             
-            return JSONResponse(status_code=200, content={"opt_text_dir": f"{opt_root}/{os.path.basename(request.inp_dir)}.txt", "opt_dir": f"{inp}"})
+            return JSONResponse(status_code=200, content={"opt_text_dir": f"{opt_root}/{os.path.basename(request.inp_dir)}.list", "opt_dir": f"{inp}"})
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"ASR task failed \n Exception: {str(e)}"})
 

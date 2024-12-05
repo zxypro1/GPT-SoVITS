@@ -207,6 +207,12 @@ class UVRRequest(BaseModel):
 async def uvr_convert(request: UVRRequest):
     # request = request.dict()
     try:
+        # fix: 确保输出文件夹存在
+        opt_root = my_utils.clean_path(request.opt_dir_vocal)
+        os.makedirs(opt_root, exist_ok=True)
+        opt_root = my_utils.clean_path(request.opt_dir_ins)
+        os.makedirs(opt_root, exist_ok=True)
+
         model_name = request.model_name
         inp_root = request.inp_dir
         save_root_vocal = request.opt_dir_vocal
@@ -344,8 +350,9 @@ async def asr(request: ASRRequest):
             output_file_path = os.path.join(opt_root)
             if not os.path.exists(output_file_path):
                 return JSONResponse(status_code=400, content={"message": "Output file does not exist"})
+            file_content = open(f"{opt_root}/{os.path.basename(request.inp_dir)}.list", "r", encoding="utf8").read()
             
-            return JSONResponse(status_code=200, content={"opt_text_dir": f"{opt_root}/{os.path.basename(request.inp_dir)}.list", "opt_dir": f"{inp}"})
+            return JSONResponse(status_code=200, content={"opt_text_dir": f"{opt_root}/{os.path.basename(request.inp_dir)}.list", "opt_dir": f"{inp}", "content": file_content})
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"ASR task failed \n Exception: {str(e)}"})
 
@@ -612,7 +619,7 @@ def train_sovits(request: TrainRequest):
         # 向notice_url发送消息
         send_notice(msg={"code": 200, "message": "SoVITS training success", "opt_dir": my_utils.clean_path(request.opt_dir)}, request=request)
 
-        return {"code": 200, "message": "SoVITS training success", "opt_dir": my_utils.clean_path(request.opt_dir)}
+        return {"code": 200, "message": "SoVITS training success", "opt_dir": my_utils.clean_path(request.opt_dir), "opt_dir_files": os.listdir(request.opt_dir)}
     except Exception as e:
         send_notice(msg={"code": 400, "message": f"SoVITS training failed \n Exception: {str(e)}"}, request=request)
         return {"code": 400, "message": f"SoVITS training failed \n Exception: {str(e)}"}
@@ -675,7 +682,7 @@ def train_gpt(request: TrainRequest):
             raise CalledProcessError(return_code, track)
         
         send_notice(msg={"code": 200, "message": "GPT training success", "opt_dir": my_utils.clean_path(request.opt_dir)}, request=request)
-        return {"code": 200, "message": "GPT training success", "opt_dir": my_utils.clean_path(request.opt_dir)}
+        return {"code": 200, "message": "GPT training success", "opt_dir": my_utils.clean_path(request.opt_dir), "opt_dir_files": os.listdir(request.opt_dir)}
     except Exception as e:
         send_notice(msg={"code": 400, "message": f"GPT training failed \n Exception: {str(e)}"}, request=request)
         return {"code": 400, "error": f"GPT training failed\n Exception: {str(e)}"}

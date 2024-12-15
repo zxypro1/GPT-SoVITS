@@ -14,6 +14,7 @@ sys.path.insert(0, now_dir)
 import argparse
 import signal
 import numpy as np
+import subprocess
 import soundfile as sf
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -148,7 +149,15 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
         need_reformat = 1
         done = 0
         try:
-            info = ffmpeg.probe(inp_path, cmd="ffprobe")
+            info = ffmpeg.probe(
+                inp_path, 
+                cmd="ffprobe",
+                args=[
+                    "-v", "error",
+                    "-select_streams", "a:0",
+                    "-show_entries", "stream=duration,bit_rate",
+                    "-of", "json"
+                ])
             if (
                 info["streams"][0]["channels"] == 2
                 and info["streams"][0]["sample_rate"] == "44100"
@@ -167,9 +176,17 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
                 os.path.join(now_dir, "TEMP"),
                 os.path.basename(inp_path),
             )
-            os.system(
-                f'ffmpeg -i "{inp_path}" -vn -acodec pcm_s16le -ac 2 -ar 44100 "{tmp_path}" -y'
-            )
+            subprocess.run([
+                'ffmpeg',
+                '-i', inp_path,
+                '-vn',
+                '-acodec', 'pcm_s16le',
+                '-ac', '2',
+                '-ar', '44100',
+                '-threads', '1',
+                tmp_path,
+                '-y'
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             inp_path = tmp_path
         # try:
         if done == 0:

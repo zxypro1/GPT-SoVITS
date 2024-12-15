@@ -152,12 +152,15 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
             info = ffmpeg.probe(
                 inp_path, 
                 cmd="ffprobe",
-                args=[
-                    "-v", "error",
-                    "-select_streams", "a:0",
-                    "-show_entries", "stream=duration,bit_rate",
-                    "-of", "json"
-                ])
+                # select_streams="a",
+                show_entries="stream=duration,sample_rate,channels",
+                v="error",
+                of="json"
+                # args=[
+                #     "-v", "quiet",
+                #     "-of", "json"
+                # ]
+                )
             if (
                 info["streams"][0]["channels"] == 2
                 and info["streams"][0]["sample_rate"] == "44100"

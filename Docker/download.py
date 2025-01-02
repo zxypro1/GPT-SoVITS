@@ -1,8 +1,9 @@
 # Download moda ASR related models
 from modelscope import snapshot_download
-model_dir = snapshot_download('damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch',revision="v2.0.4")
-model_dir = snapshot_download('damo/speech_fsmn_vad_zh-cn-16k-common-pytorch',revision="v2.0.4")
-model_dir = snapshot_download('damo/punc_ct-transformer_zh-cn-common-vocab272727-pytorch',revision="v2.0.4")
+model_dir = snapshot_download('iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch',revision="v2.0.4")
+model_dir = snapshot_download('iic/speech_fsmn_vad_zh-cn-16k-common-pytorch',revision="v2.0.4")
+model_dir = snapshot_download('iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch',revision="v2.0.4")
+model_dir = snapshot_download('iic/speech_UniASR_asr_2pass-cantonese-CHS-16k-common-vocab1468-tensorflow1-online',revision="master")
 
 import nltk
 nltk.download('averaged_perceptron_tagger_eng')

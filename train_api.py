@@ -351,7 +351,7 @@ async def asr(request: ASRRequest):
             os.makedirs(opt_root, exist_ok=True)
             
             # 构建命令
-            cmd = f'"{python_exec}" tools/asr/{asr_dict[request.model]["path"]} -i "{inp}" -o "{opt_root}" -s {request.model_size} -l {request.lang} -p {request.precision}'
+            cmd = f'"{python_exec}" -m tools.asr.{asr_dict[request.model]["path"].replace(".py","")} -i "{inp}" -o "{opt_root}" -s {request.model_size} -l {request.lang} -p {request.precision}'
             print(cmd)
             p = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
             track = []
